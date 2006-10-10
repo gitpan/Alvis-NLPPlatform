@@ -1,0 +1,54 @@
+Alvis-NLPPlatform version 0.1
+================================
+
+This is a module to annotate Web document in the ALVIS pipeline.
+
+Contains this :
+
+    go.pl (for a standalone annotation process, out of the ALVIS pipeline)
+    server.pl (Server for a client/server process in the ALVIS pipeline)
+    client.pl (Client for a client/server process in the ALVIS pipeline)
+
+INSTALLATION
+
+To install this module type the following:
+
+   perl Makefile.PL
+   make
+   make test
+   make install
+
+DEPENDENCIES
+
+This module do not require any  other modules and libraries:
+
+ Time::HiRes
+ IO::Socket
+ XML::Parser::PerlSAX
+ Alvis::TermTagger
+ Getopt::Long
+ Alvis::Pipeline
+ XML::LibXML
+ IO::File
+ IO::Socket::INET
+ Getopt::Long
+ Pod::Usage
+ Config::General
+ Sys::Hostname
+ Fcntl
+ utf8
+
+CONFIGURATION AND NLP TOOLS INSTALLATION
+
+See man Alvis::NLPPlatform.3pm (or documentation in the module
+Alvis::NLPPlatform.pm).
+
+COPYRIGHT AND LICENCE
+
+Copyright (C) 2006 by Thierry Hamon and Julien Deriviere
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself, either Perl version 5.8.6 or,
+at your option, any later version of Perl 5 you may have available.
+
+
