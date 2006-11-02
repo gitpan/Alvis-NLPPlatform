@@ -2,9 +2,9 @@
 
 ALVISTMP	= $HOME/tmp
 
-PLATFORM_ROOT	= $HOME/Recherche/Projets/ALVIS/Programs/WP5/Platform
+PLATFORM_ROOT	= $HOME/Platform
 
-AWK		= /bin/awk
+AWK		= /usr/bin/awk
 
 <alvis_connection>
 	HARVESTER_PORT	= 6234
@@ -21,6 +21,7 @@ AWK		= /bin/awk
 	RETRY_CONNECTION	= 10
 </NLP_connection>
 
+PRESERVEWHITESPACE = 1
 
 <linguistic_annotation>
 	ENABLE_TOKEN	= 1
@@ -34,13 +35,13 @@ AWK		= /bin/awk
 </linguistic_annotation>
 
 <NLP_misc>
-	NLP_resources	= $PLATFORM_ROOT/res
+	NLP_resources	= $PLATFORM_ROOT/Resources
 	SAVE_IN_OUTDIR	= 1
 	TERM_LIST_EN	= $NLP_resources/terms.txt.sav
 	TERM_LIST_FR	= $NLP_resources/terms_FR.txt
 </NLP_misc>
 
-NLP_tools_root = $PLATFORM_ROOT/tools
+NLP_tools_root = $PLATFORM_ROOT/NLPtools
 
 <NLP_tools>
 	NETAG_EN		= "$NLP_tools_root/TagEN/tagen -t :bio"
@@ -51,14 +52,14 @@ NLP_tools_root = $PLATFORM_ROOT/tools
 	POSTAG_EN		= "$NLP_tools_root/TreeTagger/bin/tree-tagger $NLP_tools_root/TreeTagger/lib/english.par -token -lemma -sgml -no-unknown"
 	#POSTAG_EN		= "(cd $NLP_tools_root/geniatagger-2.0.1; sed 's/ /___/g' | tr '\n' ' '| ./geniatagger -nt | cut -f 1,2,3|sed 's/\([^\t]*\t\)\([^\t]*\)\t\([^\t]*\)/\1\3\t\2/g' | sed 's/___/ /g' | grep -v '^$')"
 	POSTAG_FR		= "$NLP_tools_root/TreeTagger/bin/tree-tagger $NLP_tools_root/TreeTagger/lib/french.par -token -lemma -sgml -no-unknown"
-	# SYNTACTIC_PATH_EN	= "$NLP_tools_root/link-4.1b"
-	SYNTACTIC_PATH_EN       = "$NLP_tools_root/biolgForAlvis/biolg-1.1.7b"
+	SYNTACTIC_PATH_EN	= "$NLP_tools_root/link-4.1b"
+	# SYNTACTIC_PATH_EN       = "$NLP_tools_root/biolgForAlvis/biolg-1.1.7b"
 	SYNTACTIC_PATH_FR	= ""
-	# SYNTACTIC_ANALYSIS_EN	= "cd $SYNTACTIC_PATH_EN ; $SYNTACTIC_PATH_EN/parse"
-	SYNTACTIC_ANALYSIS_EN	= "cd $SYNTACTIC_PATH_EN ; $SYNTACTIC_PATH_EN/parse -xmlin"
+	SYNTACTIC_ANALYSIS_EN	= "cd $SYNTACTIC_PATH_EN ; $SYNTACTIC_PATH_EN/parse"
+	# SYNTACTIC_ANALYSIS_EN	= "cd $SYNTACTIC_PATH_EN ; $SYNTACTIC_PATH_EN/parse -xmlin"
 	SYNTACTIC_ANALYSIS_FR	= ""
-	TERM_TAG_FR		= "$NLP_tools_root/TermTagger/FiltragepleinText-vers2.pl"
-	TERM_TAG_EN		= "$NLP_tools_root/TermTagger/FiltragepleinText-vers2.pl"
+	TERM_TAG_FR		= "/usr/bin/TermTagger.pl"
+	TERM_TAG_EN		= "/usr/bin/TermTagger.pl"
 </NLP_tools>
 
 

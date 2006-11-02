@@ -250,8 +250,8 @@ sub syntactic_parsing
     
     my $class = shift @arg;
 
-#      $class->SUPER::syntactic_parsing(@arg);
-      &bio_syntactic_parsing(@arg);
+      $class->SUPER::syntactic_parsing(@arg);
+#      &bio_syntactic_parsing(@arg);
 }
 
 
@@ -488,8 +488,14 @@ sub bio_syntactic_parsing {
 				$doc_hash->{"syntactic_relation$relation_id"}->{'id'}="syntactic_relation$relation_id";
 				$doc_hash->{"syntactic_relation$relation_id"}->{'datatype'}="syntactic_relation";
 				$doc_hash->{"syntactic_relation$relation_id"}->{'syntactic_relation_type'}="$relation";
-				$doc_hash->{"syntactic_relation$relation_id"}->{'refid_head'}="word".$tab_mapping[($token_start+$wordidshift)];
-				$doc_hash->{"syntactic_relation$relation_id"}->{'refid_modifier'}="word".$tab_mapping[($token_end+$wordidshift)];
+				$doc_hash->{"syntactic_relation$relation_id"}->{'refid_head'} = {};
+				$doc_hash->{"syntactic_relation$relation_id"}->{'refid_head'}->{'datatype'}="refid_head";
+				$doc_hash->{"syntactic_relation$relation_id"}->{'refid_head'}->{"refid_word"}="word".$tab_mapping[($token_start+$wordidshift)];
+# 				$doc_hash->{"syntactic_relation$relation_id"}->{'refid_head'}="word".$tab_mapping[($token_start+$wordidshift)];
+				$doc_hash->{"syntactic_relation$relation_id"}->{'refid_modifier'} = {};
+				$doc_hash->{"syntactic_relation$relation_id"}->{'refid_modifier'}->{'datatype'}="refid_modifier";
+				$doc_hash->{"syntactic_relation$relation_id"}->{'refid_modifier'}->{"refid_word"}="word".$tab_mapping[($token_end+$wordidshift)];
+# 				$doc_hash->{"syntactic_relation$relation_id"}->{'refid_modifier'}="word".$tab_mapping[($token_end+$wordidshift)];
 				
 				$relation_id++;
 			    }

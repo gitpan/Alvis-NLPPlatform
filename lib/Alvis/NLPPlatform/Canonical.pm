@@ -22,22 +22,40 @@ canonical section of Alvis documents.
 
 =head1 METHODS
 
-=head2 CleanUp($canonical_doc)
+=head2 CleanUp($canonical_doc, $preserveWhiteSpace)
 
 This method removes all the XML tags in the canonical document
 (C<$canonical_doc>), passed as paramater. Note that the method assumes
-that only the canonical section is sent.
+that only the canonical section is sent. The boolean
+C<$preserveWhiteSpace> indicate if the linguistic annotation will be
+done by preserving white space or not, i.e. XML blank nodes and white
+space at the beginning and the end of any line.
 
 =cut
 
 sub CleanUp
 {
+    
+    my ($canonical, $preserveWhiteSpace) = @_;
+
+    if (!$preserveWhiteSpace) {
+	warn "\nRemoving White Spaces\n";
+	
+	$_[0] =~ s/^[\s\t]*(<[^>]+>)[\s\t\n]*(\n)/$1$2/go;
+	$_[0] =~ s/(\n)[\s\t\n]*(<[^>]+>)[\s\t]*(\n)/$1$2$3/go;
+	$_[0] =~ s/(\n)[\s\t\n]*(<[^>]+>)[\s\t]*/$1$2/go;
+    }
     $_[0] =~ s/<section[^>]*>//go;
     $_[0] =~ s/<\/section[^>]*>/\n/go;
     $_[0] =~ s/<\/?list>/\n/go;
     $_[0] =~ s/<\/?item>/\n/go;
-    $_[0] =~ s/\s*<\/?canonicalDocument>/\n/go;
+    $_[0] =~ s/<\/?canonicalDocument>/\n/go;
     $_[0] =~ s/<\/?ulink[^>]*>//go;
+    if (!$preserveWhiteSpace) {
+	$_[0] =~ s/\n+/\n/go;
+	$_[0] =~ s/^\n//go;
+	$_[0] =~ s/^\n$//go;
+    }
 }
 
 

@@ -1,13 +1,13 @@
-Alvis-NLPPlatform version 0.1
+Alvis-NLPPlatform version 0.2
 ================================
 
 This is a module to annotate Web document in the ALVIS pipeline.
 
 Contains this :
 
-    go.pl (for a standalone annotation process, out of the ALVIS pipeline)
-    server.pl (Server for a client/server process in the ALVIS pipeline)
-    client.pl (Client for a client/server process in the ALVIS pipeline)
+    alvis-nlp-standalone (for a standalone annotation process, out of the ALVIS pipeline)
+    alvis-nlp-server (Server for a client/server process in the ALVIS pipeline)
+    alvis-nlp-client (Client for a client/server process in the ALVIS pipeline)
 
 INSTALLATION
 
@@ -37,6 +37,17 @@ This module do not require any  other modules and libraries:
  Sys::Hostname
  Fcntl
  utf8
+
+Corresponding Debian packages are : 
+
+  libconfig-general-perl and libxml-perl
+
+  (apt-get install libconfig-general-perl libxml-perl)
+
+In case of use of Link Grammar parser for syntactic parsing, an 
+additional patch for the Link Grammar parser is required
+(lib/Alvis/NLPPlatform/patches).
+
 
 CONFIGURATION AND NLP TOOLS INSTALLATION
 

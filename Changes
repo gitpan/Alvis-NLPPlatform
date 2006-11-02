@@ -1,5 +1,31 @@
-Revision history for Perl extension Lingua::YaTeA.
+Revision history for Perl extension Alvis::NLPPlatform.
 
-2.1  
-	- second version with improvement (CPAN configuration)
+0.2
+        -  rename client.pl, server.pl, go.pl, as alvis-nlp-client, alvis-nlp-server, alvis-nlp-standalone
+        -  set the default parsing wrapper (forgot in the version 0.1)
+        -  configuration files have been moved in the alvis-nlpplatform
+	-  writing functions printing header and footer of the
+  	   documentCollection
+        -  managing annoation of several document in the standalone
+	   mode
+        - correction in the term wrapper, in the generation of the
+	  semantic units
+        - correction in the default syntactic wrapper, in the
+	  generationo of the head and modifier element. Corrections
+	  also reported in the syntactic wrapper in the UserNLPWrapper
+	  module
+        - default term tagger wrapper takes into account given
+	  canonical form of terms if the term tagger returns it.
+	- modified dependencies for syntactic parsing (now needs PoS tagging)
+        - control characters are not visibles 
+        - addition of an option for preserving or not the white
+	  spaces (XML blank nodes, but also beginning and end of the
+	  line spaces). Default behaviour is removing the white spaces.
+        - addition of a patch for Link Gramar Parser 4.1a and
+	  4.1b. This patch adds a option (!whitespaces) to avoid LG
+	  tokenization.
+
+
+0.1  
+	-  version with CPAN configuration
 

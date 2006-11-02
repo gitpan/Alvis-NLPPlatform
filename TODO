@@ -1,3 +1,4 @@
-- Regenerate the MANIFEST FILE
 
 - remove any use of xmlfoot and xmlhead
+
+- managing several document in the client/server mode

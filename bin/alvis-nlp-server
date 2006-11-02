@@ -2,11 +2,11 @@
 
 =head1 NAME
 
-server.pl - Perl script for the server of the Alvis NLP Platform. 
+alvis-nlp-server - Perl script for the server of the Alvis NLP Platform. 
 
 =head1 SYNOPSIS
 
-server.pl [options]
+alvis-nlp-server [options]
 
 =head1 OPTIONS
 

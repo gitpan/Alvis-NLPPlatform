@@ -2,11 +2,11 @@
 
 =head1 NAME
 
-client.pl - Perl script for the client of the Alvis NLP Platform running in the distributed mode. 
+alvis-nlp-client - Perl script for the client of the Alvis NLP Platform running in the distributed mode. 
 
 =head1 SYNOPSIS
 
-client.pl [options]
+alvis-nlp-client [options]
 
 =head1 OPTIONS
 

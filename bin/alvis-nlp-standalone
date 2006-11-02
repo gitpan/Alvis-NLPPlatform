@@ -3,11 +3,11 @@
 
 =head1 NAME
 
-go.pl - Perl script for linguistically annotating a corpus contained in a file
+alvis-nlp-standalone - Perl script for linguistically annotating a corpus contained in a file
 
 =head1 SYNOPSIS
 
-go.pl [options] < Input_document > Annotated_Output_Document
+alvis-nlp-standalone [options] < Input_document > Annotated_Output_Document
 
 =head1 OPTIONS
 
@@ -89,6 +89,15 @@ while($line=<STDIN>) {
 }
 
 
+my @tab_docs_xml = Alvis::NLPPlatform::split_to_docRecs($doc_xml);
 
-Alvis::NLPPlatform::standalone_main(\%config, $doc_xml, \*STDOUT);
+Alvis::NLPPlatform::Annotation::print_documentCollectionHeader(\*STDOUT);
+
+my $i;
+
+for($i = 0; $i<scalar(@tab_docs_xml); $i++) {
+    Alvis::NLPPlatform::standalone_main(\%config, ${$tab_docs_xml[$i]}[1], \*STDOUT, 0);
+}
+
+Alvis::NLPPlatform::Annotation::print_documentCollectionFooter(\*STDOUT);
 

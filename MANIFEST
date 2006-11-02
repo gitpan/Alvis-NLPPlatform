@@ -1,9 +1,9 @@
-bin/client.pl
-bin/go.pl
-bin/server.pl
+bin/alvis-nlp-client
+bin/alvis-nlp-standalone
+bin/alvis-nlp-server
 Changes
-etc/nlpplatform-test.rc
-etc/nlpplatform.rc
+etc/alvis-nlpplatform/nlpplatform-test.rc
+etc/alvis-nlpplatform/nlpplatform.rc
 INSTALL
 lib/Alvis/NLPPlatform.pm
 lib/Alvis/NLPPlatform/Annotation.pm
@@ -18,6 +18,8 @@ lib/Alvis/NLPPlatform/NLPWrappers.pm
 lib/Alvis/NLPPlatform/UserNLPWrappers-template.pm
 lib/Alvis/NLPPlatform/UserNLPWrappers.pm
 lib/Alvis/NLPPlatform/XMLEntities.pm
+lib/Alvis/NLPPlatform/patches/link-4.1a-WithWhiteSpace.diff
+lib/Alvis/NLPPlatform/patches/link-4.1b-WithWhiteSpace.diff
 LICENSE
 Makefile.PL
 MANIFEST			This list of files

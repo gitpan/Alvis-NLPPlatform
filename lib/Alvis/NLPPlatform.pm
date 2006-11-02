@@ -109,9 +109,8 @@ segmentation.  Term tagging is recommended to improve the parsing of noun phrase
 
 =cut
 
-our $VERSION='0.1';
+our $VERSION='0.2';
 
-our $VERSION_my;
 
 use strict;
 use Alvis::NLPPlatform::XMLEntities;
@@ -250,7 +249,7 @@ sub compute_dependencies{
 	$val|=77;
     }
     if($h_config->{'linguistic_annotation'}->{'ENABLE_SYNTAX'}){
-	$val|=141;
+	$val|=157;
     }
 
     print STDERR "Dependency mask: $val\n";
@@ -427,8 +426,9 @@ The document is loaded into memory and then annotated according to the
 steps defined in the configuration variables (C<$hash_config> is the
 reference to the hashtable containing the variables defined in the
 configuration file). The annotated document is printed to the file
-defined by the descriptor given as parameter (in the given example, the
-standard output).
+defined by the descriptor given as parameter (in the given example,
+the standard output). C<$printCollectionHeaderFooter> indicates if the
+C<documentCollection> header and footer have to be printed.
 
 =cut
 
@@ -436,6 +436,7 @@ sub standalone_main {
     my $h_config = $_[0];
     my $doc_xml = $_[1];
     my $descriptor = $_[2];
+    my $printCollectionHeaderFooter = $_[3];
 
     my $xmlhead="";#"<?xml version=\"1.0\" encoding=\"$charset\"?>\n<documentCollection xmlns=\"http://alvis.info/enriched/\" version=\"1.1\">\n";
     my $xmlfoot="";#</documentCollection>\n";
@@ -527,7 +528,7 @@ sub standalone_main {
 	print STDERR "Rendering XML...  ";
 
 	starttimer();
-	Alvis::NLPPlatform::Annotation::render_xml($doc_hash, $descriptor);
+	Alvis::NLPPlatform::Annotation::render_xml($doc_hash, $descriptor, $printCollectionHeaderFooter);
 	$time_render+=endtimer();
 
 # TODO : recording the xml rendering time
@@ -553,20 +554,7 @@ sub standalone_main {
 
     close LOGERRORS;
 
-    $time_total=$time_load+$time_tok+$time_ne+$time_word+$time_sent+$time_pos+$time_lemm+$time_term+$time_render;
-    open BENCHMARK,">$ALVISTMP/benchmark.log";
-    print BENCHMARK "load_xml\t$time_load\t".(($time_load/$time_total)*100)."\n";
-    print BENCHMARK "Tok\t$time_tok\t".(($time_tok/$time_total)*100)."\n";
-    print BENCHMARK "NER\t$time_ne\t".(($time_ne/$time_total)*100)."\n";
-    print BENCHMARK "WRDS\t$time_word\t".(($time_word/$time_total)*100)."\n";
-    print BENCHMARK "SNTS\t$time_sent\t".(($time_sent/$time_total)*100)."\n";
-    print BENCHMARK "POS\t$time_pos\t".(($time_pos/$time_total)*100)."\n";
-    print BENCHMARK "Lemma\t$time_lemm\t".(($time_lemm/$time_total)*100)."\n";
-    print BENCHMARK "Terms\t$time_term\t".(($time_term/$time_total)*100)."\n";
-    print BENCHMARK "render_xml\t$time_render\t".(($time_render/$time_total)*100)."\n";
-    print BENCHMARK "\n";
-    print BENCHMARK "TOTAL\t$time_total\n";
-    close BENCHMARK;
+#     $time_total=$time_load+$time_tok+$time_ne+$time_word+$time_sent+$time_pos+$time_lemm+$time_term+$time_render;
 
     return(0);
 }
@@ -689,7 +677,7 @@ sub load_config
 # Read de configuration file
 
     if ($rcfile eq "") {
-	$rcfile = "/etc/nlpplatform.rc";
+	$rcfile = "/etc/alvis-nlpplatform/nlpplatform.rc";
     }
     
     my $conf = new Config::General('-ConfigFile' => $rcfile,
@@ -874,7 +862,7 @@ sub client
 
 	print STDERR "Rendering XML...  ";
 
-	Alvis::NLPPlatform::Annotation::render_xml($doc_hash, $sock);
+	Alvis::NLPPlatform::Annotation::render_xml($doc_hash, $sock, 1);
 
 # TODO : recording the xml rendering time
 	print STDERR "done\n";
@@ -1485,14 +1473,18 @@ variables and divided into several sections:
 
 =item * Global variables.
 
-Only one is mandatory (C<ALVISTMP>). It defines the temporary
- directory used during the annotation process. It must be writable to
- the user the process is running as.
+The two mandatory variables are C<ALVISTMP> and
+ C<PRESERVEWHITESPACE>. C<ALVISTMP> defines the temporary directory
+ used during the annotation process. It must be writable to the user
+ the process is running as. C<$preserveWhiteSpace> is a boolean
+ indicating if the linguistic annotation will be done by preserving
+ white space or not, i.e. XML blank nodes and white space at the
+ beginning and the end of any line.
 
-Additional variables and
-environement variables can be used if they are interpolated in the
-configuration file. For instance, in the default configuration file,
-we add C<PLATFORM_ROOT>, C<NLP_tools_root>, and C<AWK>.
+Additional variables and environement variables can be used if they
+are interpolated in the configuration file. For instance, in the
+default configuration file, we add C<PLATFORM_ROOT>,
+C<NLP_tools_root>, and C<AWK>.
 
 =over 8
 
@@ -1895,6 +1887,13 @@ Link Grammar Parser:
     See the Makefile for configuration
 
     run make
+
+    Apply the additional patch for the Link Grammar parser (lib/Alvis/NLPPlatform/patches).
+
+        cd link-4.1b
+        patch -p0 < lib/Alvis/NLPPlatform/patches/link-4.1b-WithWhiteSpace.diff
+ 
+     Similar patch exists for the version 4.1a of the Link Grammar parser
 
 =item * Licence:
 

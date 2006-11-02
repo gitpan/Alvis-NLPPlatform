@@ -44,6 +44,7 @@ annoted or not, even partially annotated.
 use Alvis::NLPPlatform::MyReceiver;
 use Time::HiRes qw(gettimeofday tv_interval);
 
+our $document_record_head;
 our $document_record_id;
 our $canonicalDocument;
 our $acquisitionData;
@@ -101,9 +102,9 @@ sub sort_keys {
 
     my $key1;
     my $key2;
-    $a=~m/^(token|word|sentence|semantic_unit|log_processing)([0-9]+)/;
+    $a=~m/^(token|word|lemma|phrase|morphosyntactic_features|sentence|semantic_unit|syntactic_relation|log_processing)([0-9]+)/;
     $key1=$2;
-    $b=~m/^(token|word|sentence|semantic_unit|log_processing)([0-9]+)/;
+    $b=~m/^(token|word|lemma|phrase|morphosyntactic_features|sentence|semantic_unit|syntactic_relation|log_processing)([0-9]+)/;
     $key2=$2;
     return -1 if ($key1 < $key2);
     return 0 if ($key1 == $key2);
@@ -131,7 +132,32 @@ sub sort{
 }
 
 sub sort_keys_lex{
-    return $a cmp $b;
+
+    my $key1;
+    my $key2;
+
+
+    my $type1;
+    my $type2;
+    if ($a=~m/^(token|word|lemma|phrase|morphosyntactic_features|sentence|semantic_unit|syntactic_relation|log_processing)([0-9]+)/) {
+	$type1 = $1;
+	$key1=$2;
+	if ($b=~m/^(token|word|lemma|phrase|morphosyntactic_features|sentence|semantic_unit|syntactic_relation|log_processing)([0-9]+)/) {
+	    $type2 = $1;
+	    $key2=$2;
+	    if ($type1 eq $type2) {
+		return ($key1 <=> $key2);
+# 		return $a cmp $b;
+	    } else {
+		return $a cmp $b;
+	    }
+	} else {
+	    return $a cmp $b;
+	}
+    } else {
+	return $a cmp $b;
+    }
+
 }
 
 =head2 render()
@@ -175,8 +201,11 @@ sub render{
     my  $indent="    "; # for indent
 
 
+
+#    print STDERR "--\n";
     # Hash table scaning
     foreach $key(sort sort_keys_lex keys %$annot){
+#	print STDERR "$key\n";
 
 	my $hash_key = $annot->{"$key"};
 
@@ -331,7 +360,7 @@ sub render{
 	    $index=0;
 
 	    # Scan the elements of the array
-	    foreach $element (@$content){
+	    foreach $element (sort sort_keys_lex @$content){ ###########
 		$index++;
 
 		if(ref($element) eq "HASH"){
@@ -365,6 +394,9 @@ sub render{
 
 		    if($key=~/^list\-(.+) *\n?/){
 			# mark "list-"
+			$element =~ s/\\n/\n/g;
+			$element =~ s/\\r/\r/g;
+			$element =~ s/\\t/\t/g;
 			print $descriptor  "\n$indent  <$1>$element</$1>";
 			$was_list_tab=1;
 		    }else{
@@ -392,23 +424,41 @@ sub render{
 	    # for generate mark name
 	    if($key ne "datatype"){
 		Alvis::NLPPlatform::XMLEntities::encode($content);
+	        $content =~ s/\\n/\n/g;
+		$content =~ s/\\r/\r/g;
+		$content =~ s/\\t/\t/g;
 		print $descriptor  "$indent<$key>$content</$key>\n";
 	    }
 	}
     }
+#    print STDERR "++\n";
     return(0);
+}
+
+sub print_documentCollectionHeader {
+    my $descriptor = $_[0];
+
+	print $descriptor "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
+	print $descriptor "<documentCollection xmlns=\"http://alvis.info/enriched/\" version=\"1.1\">\n";
+}
+
+sub print_documentCollectionFooter {
+    my $descriptor = $_[0];
+
+    print $descriptor "</documentCollection>\n";
 }
 
 =head2 render_xml()
 
 
-    render($doc_hash, $descriptor);
+    render($doc_hash, $descriptor, $printCollectionHeaderFooter);
 
 
 Main method used for generating XML document
 annotations. C<$descriptor> is the decriptor of the file where the
-document will be stored. C<$doc_hash> is tha hashtable containing the
-annotated document.
+document will be stored. C<$doc_hash> is the hashtable containing the
+annotated document. C<$printCollectionHeaderFooter> indicates if the
+C<documentCollection> header and footer have to be printed.
 
 The method return 0 in case of success.
 
@@ -417,13 +467,15 @@ The method return 0 in case of success.
 sub render_xml{
     my $doc_xml_hash = $_[0];
     my $descriptor = $_[1];
+    my $printCollectionHeaderFooter = $_[2];
 
     my  $indent="    "; # for indent
     $end_layer="";
 
-    print $descriptor "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
-    print $descriptor "<documentCollection xmlns=\"http://alvis.info/enriched/\" version=\"1.1\">\n";
-    print $descriptor "<documentRecord id=\"$Alvis::NLPPlatform::Annotation::document_record_id\">\n";
+    if ($printCollectionHeaderFooter) {
+	&print_documentCollectionHeader($descriptor);
+    }
+    print $descriptor $Alvis::NLPPlatform::Annotation::document_record_head;
     print $descriptor  "  <acquisition>\n";
     print $descriptor $Alvis::NLPPlatform::Annotation::acquisitionData;
     print $descriptor $Alvis::NLPPlatform::Annotation::originalDocument;
@@ -446,8 +498,9 @@ sub render_xml{
     print $descriptor "  </linguisticAnalysis>\n";
     print $descriptor $Alvis::NLPPlatform::Annotation::relevance;
     print $descriptor "</documentRecord>\n";
-    print $descriptor "</documentCollection>\n";
-
+    if ($printCollectionHeaderFooter) {
+	&print_documentCollectionFooter($descriptor);
+    }
     return(0);
 }
 
@@ -501,7 +554,8 @@ sub load_xml
 	    $ALVISLANGUAGE=uc($1);
 	}
         # Get the document id
-	if($line=~/<documentRecord[ \s]+id[ \s]*=[ \s]*"(.+)">/){
+	if($line=~/<documentRecord.*?[ \s]+id[ \s]*=[ \s]*"(.+)".*?>/){
+	    $document_record_head = $line;
 	    $document_record_id=$1;
 	}
 	# canonicalDocument

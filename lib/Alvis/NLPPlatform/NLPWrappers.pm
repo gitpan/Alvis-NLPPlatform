@@ -106,10 +106,14 @@ sub tokenize
     print STDERR "  Tokenizing...           ";
     
     $canonical=$Alvis::NLPPlatform::Annotation::canonicalDocument;
-    Alvis::NLPPlatform::Canonical::CleanUp($canonical);
+    Alvis::NLPPlatform::Canonical::CleanUp($canonical, $h_config->{"PRESERVEWHITESPACE"});
+
     @lines=split /\n/,$canonical;
 
+
+
     map {$_ .= "\n"} @lines;
+
     if (($canonical =~ /\n$/) && ($#lines > -1)) {
 	chomp $lines[$#lines];
     }
@@ -121,13 +125,13 @@ sub tokenize
  	utf8::decode($line);
 	  # convert SGML into characters
 	  Alvis::NLPPlatform::XMLEntities::decode($line);
-	  
 
 	  # character spliting
 
 	  @characters=split //,$line;
 	  
 	  foreach $char(@characters){
+
 	      # determine the type of the current character
 	      $current_char=4; # default type
 	      if($char=~/$alpha/){$current_char=1;}
@@ -276,7 +280,7 @@ sub scan_ne
     @Alvis::NLPPlatform::en_end=();
     @Alvis::NLPPlatform::en_type=();
 
-    open REN,"<" . $h_config->{'TMPFILE'} . ".corpus.tag.txt";
+    open REN,"<" . $h_config->{'TMPFILE'} . ".corpus.tag.txt"  or warn "Can't open the file " . $h_config->{'TMPFILE'} . ".corpus.tag.txt";;
     while($line=<REN>){
 	$line=~m/(.+)\s+([0-9]+)\s+([0-9]+)/;
 	push @Alvis::NLPPlatform::en_type,$1;
@@ -523,7 +527,7 @@ sub word_segmentation
 		    ########################################################
 
 		    push @tab_tokens, "token$token_id";
-		    $Alvis::NLPPlatform::word_end[$word_id]=$token_id; # Add by thierry (10/02/2006)
+		    $Alvis::NLPPlatform::word_end[$word_id]=$token_id; # Added by thierry (10/02/2006)
 		    $refid_n++;
 		    $token_id++;
 		}
@@ -1063,6 +1067,7 @@ sub term_tag
     my $sent;
     my $term;
     my $phrase_idx=1;
+    my $canonical_form;
 
     print STDERR "  Term tagging...         ";
 
@@ -1079,11 +1084,11 @@ sub term_tag
     my $command_line;
     
     if($Alvis::NLPPlatform::Annotation::ALVISLANGUAGE eq "FR"){
-	$command_line = $h_config->{"NLP_tools"}->{"TERM_TAG_FR"} . " " . $h_config->{'NLP_misc'}->{'TERM_LIST_FR'} . " " . $h_config->{'TMPFILE'} . ".tempo " . $h_config->{'TMPFILE'} . ".result.tmp < " . $h_config->{'TMPFILE'} . ".corpus.tmp 2> /dev/null";
-#	$command_line = $h_config->{"NLP_tools"}->{"TERM_TAG_FR"} . " " . $h_config->{'NLP_misc'}->{'TERM_LIST_FR'} . " " . $h_config->{'TMPFILE'} . ".result.tmp < " . $h_config->{'TMPFILE'} . ".corpus.tmp 2> /dev/null";
+# 	$command_line = $h_config->{"NLP_tools"}->{"TERM_TAG_FR"} . " " . $h_config->{'NLP_misc'}->{'TERM_LIST_FR'} . " " . $h_config->{'TMPFILE'} . ".tempo " . $h_config->{'TMPFILE'} . ".result.tmp < " . $h_config->{'TMPFILE'} . ".corpus.tmp 2> /dev/null";
+	$command_line = $h_config->{"NLP_tools"}->{"TERM_TAG_FR"} . " " . $h_config->{'TMPFILE'} . ".corpus.tmp " . $h_config->{'NLP_misc'}->{'TERM_LIST_FR'} . " " . $h_config->{'TMPFILE'} . ".result.tmp  2> /dev/null";
     }else{
-	$command_line = $h_config->{"NLP_tools"}->{"TERM_TAG_EN"} . " " . $h_config->{'NLP_misc'}->{'TERM_LIST_EN'} . " " . $h_config->{'TMPFILE'} . ".tempo " . $h_config->{'TMPFILE'} . ".result.tmp < " . $h_config->{'TMPFILE'} . ".corpus.tmp 2> /dev/null";
-#	$command_line = $h_config->{"NLP_tools"}->{"TERM_TAG_EN"} . " " . $h_config->{'NLP_misc'}->{'TERM_LIST_EN'} . " " . $h_config->{'TMPFILE'} . ".result.tmp < " . $h_config->{'TMPFILE'} . ".corpus.tmp 2> /dev/null";
+# 	$command_line = $h_config->{"NLP_tools"}->{"TERM_TAG_EN"} . " " . $h_config->{'NLP_misc'}->{'TERM_LIST_EN'} . " " . $h_config->{'TMPFILE'} . ".tempo " . $h_config->{'TMPFILE'} . ".result.tmp < " . $h_config->{'TMPFILE'} . ".corpus.tmp 2> /dev/null";
+	$command_line = $h_config->{"NLP_tools"}->{"TERM_TAG_EN"} . " " . $h_config->{'TMPFILE'} . ".corpus.tmp " . $h_config->{'NLP_misc'}->{'TERM_LIST_EN'} . " " . $h_config->{'TMPFILE'} . ".result.tmp  2> /dev/null";
     }
     `$command_line`;
     close CORPUS;
@@ -1092,9 +1097,8 @@ sub term_tag
 
     while($line=<TERMS>){
 	chomp $line;
-	$line=~/([0-9]+)\t(.+)/;
-	$tabh_sent_terms{"$1_$2"}->[0] = $1;
-	$tabh_sent_terms{"$1_$2"}->[1] = $2;
+	my @tab_line = split /\t/, $line;
+	$tabh_sent_terms{$tab_line[0] . "_" . $tab_line[1]} = \@tab_line;
     }
     close TERMS;
 
@@ -1115,6 +1119,7 @@ sub term_tag
 	$sent = $tabh_sent_terms{$key}->[0];
 	$term = $tabh_sent_terms{$key}->[1];
 
+        $canonical_form = $tabh_sent_terms{$key}->[2];
 
 	# loot for the term in the sentence, compute the reference to the words
 	$token_term = -1;
@@ -1161,7 +1166,9 @@ sub term_tag
 			$doc_hash->{"semantic_unit$s"}->{"term"}->{"datatype"}="term";
 			$doc_hash->{"semantic_unit$s"}->{"term"}->{"id"}="term" . $i++;
 			$doc_hash->{"semantic_unit$s"}->{"term"}->{"form"}=$term;
-
+			if (defined($canonical_form)) {
+			    $doc_hash->{"semantic_unit$s"}->{"term"}->{"canonical_form"}=$canonical_form;
+			}
 			# XXX TO BE OPTIMIZED !!!
 
 			my $k=1;
@@ -1181,10 +1188,15 @@ sub term_tag
 			    push @tab_words,"word$k";
 			}
 			# XXX
+                        if (scalar @tab_words == 0) {
+# 			    warn "No word found for the term $term\n";
+			    $doc_hash->{"semantic_unit$s"}->{"term"}->{"list_refid_token"}={};
+			    $doc_hash->{"semantic_unit$s"}->{"term"}->{"list_refid_token"}->{"datatype"} = "list_refid_token";
+			    $doc_hash->{"semantic_unit$s"}->{"term"}->{"list_refid_token"}->{"refid_token"}=\@tab_tokens;
+			    
+			}
 			if(scalar @tab_words==1){
-			    $doc_hash->{"semantic_unit$s"}->{"term"}->{"list_refid_word"}={};
-			    $doc_hash->{"semantic_unit$s"}->{"term"}->{"list_refid_word"}->{"datatype"}="list_refid_word";
-			    $doc_hash->{"semantic_unit$s"}->{"term"}->{"list_refid_word"}->{"refid_word"}=\@tab_words;
+			    $doc_hash->{"semantic_unit$s"}->{"term"}->{"refid_word"}=\@tab_words;
 			}
 			if(scalar @tab_words>1){
 			    $doc_hash->{"phrase$phrase_idx"}={};
@@ -1194,9 +1206,7 @@ sub term_tag
 			    $doc_hash->{"phrase$phrase_idx"}->{'list_refid_components'}->{"datatype"}="list_refid_components";
 			    $doc_hash->{"phrase$phrase_idx"}->{'list_refid_components'}->{"refid_word"}=\@tab_words;
 
-			    $doc_hash->{"semantic_unit$s"}->{"term"}->{"list_refid_phrase"}={};
-			    $doc_hash->{"semantic_unit$s"}->{"term"}->{"list_refid_phrase"}->{"datatype"}="list_refid_phrase";
-			    $doc_hash->{"semantic_unit$s"}->{"term"}->{"list_refid_phrase"}->{"refid_phrase"}="phrase$phrase_idx";
+			    $doc_hash->{"semantic_unit$s"}->{"term"}->{"refid_phrase"}="phrase$phrase_idx";
 			    $phrase_idx++;
 			}
 
@@ -1216,11 +1226,11 @@ sub term_tag
 	    }
 	}
     }
-
+   #    print STDERR $h_config->{'TMPFILE'} . ".result.tmp\n";
     unlink $h_config->{'TMPFILE'} . ".corpus.tmp";
     unlink $h_config->{'TMPFILE'} . ".result.tmp";
-    print STDERR "done - Found ". ($Alvis::NLPPlatform::last_semantic_unit - $i) ." semantic units\n";
-    push @{$doc_hash->{"log_processing1"}->{"comments"}},  "Found Terms: " . $Alvis::NLPPlatform::last_semantic_unit;
+    print STDERR "done - Found ". ($i) ." semantic units\n";
+    push @{$doc_hash->{"log_processing1"}->{"comments"}},  "Found Terms: " . $i;
 }
 
 =head2 syntactic_parsing()
@@ -1309,7 +1319,9 @@ sub syntactic_parsing{
 	if($word_cont eq "."){
 	    $sentences_cont.="\n";
 	}else{
-	    $sentences_cont.="$word_cont ";
+	    my $word_tmp=$word_cont;
+	    $word_tmp=~s/ /\_/g;
+	    $sentences_cont.="$word_tmp ";
 	}
     }
 
@@ -1322,26 +1334,27 @@ sub syntactic_parsing{
     my $idx_nopunct=1;
     for($i=0;$i<scalar @tab_word_punct;$i++){
 	if(($idx_nopunct<scalar @tab_word)&&($tab_word_punct[$i] eq $tab_word[$idx_nopunct])){
-	    #print STDERR "$tab_word_punct[$i] => $tab_word[$idx_nopunct] ($i => $idx_nopunct)\n";
+#	    print STDERR "$tab_word_punct[$i] => $tab_word[$idx_nopunct] ($i => $idx_nopunct)    $Alvis::NLPPlatform::hash_words{'word'.$idx_nopunct}\n";
 	    $tab_mapping[$idx_nopunct]=$idx_nopunct;
 	    $idx_nopunct++;
 	}
     }
 
     # remove whitespaces in NE
-    my $ne;
-    my $ne_cont;
-    my $ne_mod;
-    foreach $ne(keys %Alvis::NLPPlatform::hash_named_entities){
-	$ne_cont=$Alvis::NLPPlatform::hash_named_entities{$ne};
-	$ne_mod=$ne_cont;
-	if($ne_cont=~/ /){
-	    if($sentences_cont=~/$ne_cont/){
-		$ne_mod=~s/ /\_/g;
-		$sentences_cont=~s/$ne_cont/$ne_mod/g;
-	    }
-	}
-    }
+#     my $ne;
+#     my $ne_cont;
+#     my $ne_mod;
+#     foreach $ne(keys %Alvis::NLPPlatform::hash_named_entities){
+# 	$ne_cont=$Alvis::NLPPlatform::hash_named_entities{$ne};
+# 	$ne_mod=$ne_cont;
+# 	if($ne_cont=~/ /){
+# 	    if($sentences_cont=~/$ne_cont/){
+# 		print STDERR "Found NE $ne_cont in sentence\n";
+# 		$ne_mod=~s/ /\_/g;
+# 		$sentences_cont=~s/$ne_cont/$ne_mod/g;
+# 	    }
+# 	}
+#     }
     
     print CORPUS $sentences_cont;
     close CORPUS;
@@ -1435,14 +1448,29 @@ sub syntactic_parsing{
 			$token_start++;
 			$token_end++;
 		    }
-		    # make sure we're not dealing with punctuation, otherwise just ignore
-		    if(($tab_mapping[$token_start+$wordidshift] ne "") && ($tab_mapping[$token_end+$wordidshift] ne "")){
+		    # make sure we're not dealing with punctuation, otherwise just ignore'
+ 	            if((defined($tab_mapping[$token_start+$wordidshift])) && (defined($tab_mapping[$token_end+$wordidshift]) ne "")){
+#                        if($tab_mapping[($token_start+$wordidshift)]==14){
+#                            if($tab_mapping[($token_end+$wordidshift)]==15){
+#                                 print STDERR "\n";
+#                                 print STDERR "Salete de bug:\n";
+#                                 print STDERR "$token_start ; $token_end ; $wordidshift\n";
+#                                 print STDERR "\n";
+#                            }
+#                        }
+#                        print STDERR "$relation (".$tab_mapping[($token_start+$wordidshift)]." ; ".$tab_mapping[($token_end+$wordidshift)].")\n";
 			$doc_hash->{"syntactic_relation$relation_id"}={};
 			$doc_hash->{"syntactic_relation$relation_id"}->{'id'}="syntactic_relation$relation_id";
 			$doc_hash->{"syntactic_relation$relation_id"}->{'datatype'}="syntactic_relation";
 			$doc_hash->{"syntactic_relation$relation_id"}->{'syntactic_relation_type'}="$relation";
-			$doc_hash->{"syntactic_relation$relation_id"}->{'refid_head'}="word".$tab_mapping[($token_start+$wordidshift)];
-			$doc_hash->{"syntactic_relation$relation_id"}->{'refid_modifier'}="word".$tab_mapping[($token_end+$wordidshift)];
+			$doc_hash->{"syntactic_relation$relation_id"}->{'refid_head'} = {};
+			$doc_hash->{"syntactic_relation$relation_id"}->{'refid_head'}->{'datatype'}="refid_head";
+			$doc_hash->{"syntactic_relation$relation_id"}->{'refid_head'}->{"refid_word"}="word".$tab_mapping[($token_start+$wordidshift)];
+# 			$doc_hash->{"syntactic_relation$relation_id"}->{'refid_head'}="word".$tab_mapping[($token_start+$wordidshift)];
+			$doc_hash->{"syntactic_relation$relation_id"}->{'refid_modifier'} = {};
+			$doc_hash->{"syntactic_relation$relation_id"}->{'refid_modifier'}->{'datatype'}="refid_modifier";
+			$doc_hash->{"syntactic_relation$relation_id"}->{'refid_modifier'}->{"refid_word"}="word".$tab_mapping[($token_end+$wordidshift)];
+# 			$doc_hash->{"syntactic_relation$relation_id"}->{'refid_modifier'}="word".$tab_mapping[($token_end+$wordidshift)];
 			
 			$relation_id++;
 		    }
@@ -1452,8 +1480,9 @@ sub syntactic_parsing{
 	    # trash everything and continue the loop
 
 	    $insentence=0;
-	    #print STDERR "Word ID shift changing from $wordidshift to ";
+#	    print STDERR "Word ID shift changing from $wordidshift to ";
 	    $wordidshift+=$last_token-1;
+#           print STDERR "$wordidshift\n";
 	}
     }
     close SYN_RES;

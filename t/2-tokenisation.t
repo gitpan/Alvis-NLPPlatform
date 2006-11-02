@@ -24,7 +24,7 @@ my $doc_xml;
 eval { use Alvis::NLPPlatform; };
 eval { use Config::General; };
 eval { use Data::Dumper; };
-eval { (%config = Alvis::NLPPlatform::load_config("etc/nlpplatform-test.rc")) && ($def_config=1)  };
+eval { (%config = Alvis::NLPPlatform::load_config("etc/alvis-nlpplatform/nlpplatform-test.rc")) && ($def_config=1)  };
 ok(defined $def_config);
 eval {
      *STDERR=*STDOUT;
