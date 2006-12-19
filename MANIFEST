@@ -28,3 +28,4 @@ t/0-creation.t
 t/1-loadconfig.t
 t/2-tokenisation.t
 TODO
+META.yml			Module meta-data (added by MakeMaker)

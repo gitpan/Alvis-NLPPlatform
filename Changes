@@ -1,31 +1,48 @@
 Revision history for Perl extension Alvis::NLPPlatform.
 
+0.3    - additional options for the link parser wrapper, to write link
+         parser postscritp output (PARSING_IN_P0STSCRIPT)
+         and/or link parser graphics output (PARSING_GRAPHICS) in file 
+       - bug fix in the default term wrapper (a term embedded in a
+         named entity was not detected)
+       - bug fix in the default syntactic parser. Take into account
+         empty sentence parsing.
+       - Modification of the TermTagger : term list is loaded once.
+       - Display of the processing time for each step
+       - fix a bug in the XML loader of semantic unit/named-entity
+       - Definition of a section to manage XML input : the option
+         PRESERVEWHITESPACE is set in; addition of the option
+         LINGUISTIC_ANNOTATION_LOADING
+       - Definition of a section to manage XML output
+       - Render time is saved in the xml file (Client/server and
+         stantalone mode)
+
 0.2
-        -  rename client.pl, server.pl, go.pl, as alvis-nlp-client, alvis-nlp-server, alvis-nlp-standalone
-        -  set the default parsing wrapper (forgot in the version 0.1)
-        -  configuration files have been moved in the alvis-nlpplatform
-	-  writing functions printing header and footer of the
-  	   documentCollection
-        -  managing annoation of several document in the standalone
-	   mode
-        - correction in the term wrapper, in the generation of the
-	  semantic units
-        - correction in the default syntactic wrapper, in the
-	  generationo of the head and modifier element. Corrections
-	  also reported in the syntactic wrapper in the UserNLPWrapper
-	  module
-        - default term tagger wrapper takes into account given
-	  canonical form of terms if the term tagger returns it.
-	- modified dependencies for syntactic parsing (now needs PoS tagging)
-        - control characters are not visibles 
-        - addition of an option for preserving or not the white
-	  spaces (XML blank nodes, but also beginning and end of the
-	  line spaces). Default behaviour is removing the white spaces.
-        - addition of a patch for Link Gramar Parser 4.1a and
-	  4.1b. This patch adds a option (!whitespaces) to avoid LG
-	  tokenization.
+       -  rename client.pl, server.pl, go.pl, as alvis-nlp-client, alvis-nlp-server, alvis-nlp-standalone
+       -  set the default parsing wrapper (forgot in the version 0.1)
+       -  configuration files have been moved in the alvis-nlpplatform
+       -  writing functions printing header and footer of the
+          documentCollection
+       -  managing annoation of several document in the standalone
+          mode
+       - correction in the term wrapper, in the generation of the
+         semantic units
+       - correction in the default syntactic wrapper, in the
+         generationo of the head and modifier element. Corrections
+         also reported in the syntactic wrapper in the UserNLPWrapper
+         module
+       - default term tagger wrapper takes into account given
+         canonical form of terms if the term tagger returns it.
+       - modified dependencies for syntactic parsing (now needs PoS tagging)
+       - control characters are not visibles 
+       - addition of an option for preserving or not the white
+         spaces (XML blank nodes, but also beginning and end of the
+         line spaces). Default behaviour is removing the white spaces.
+       - addition of a patch for Link Gramar Parser 4.1a and
+         4.1b. This patch adds a option (!whitespaces) to avoid LG
+         tokenization.
 
 
 0.1  
-	-  version with CPAN configuration
+       -  version with CPAN configuration
 

@@ -2,3 +2,11 @@
 - remove any use of xmlfoot and xmlhead
 
 - managing several document in the client/server mode
+
+- integrate features defined in XML_INPUT and XML_OUTPUT
+
+- complete the modification of the xml loader (above all managing
+  terms like EN)
+
+- modify the spit_to_docrecfunc tion in NLPPlatform to take into
+  account

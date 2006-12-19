@@ -109,7 +109,7 @@ segmentation.  Term tagging is recommended to improve the parsing of noun phrase
 
 =cut
 
-our $VERSION='0.2';
+our $VERSION='0.3';
 
 
 use strict;
@@ -158,6 +158,11 @@ our %en_tokens_hash;
 our $last_semantic_unit;
 
 our %last_words;
+our @found_terms;
+our @found_terms_tidx;
+our @found_terms_smidx;
+our @found_terms_phr;
+our @found_terms_words;
 
 my $id;
 
@@ -335,11 +340,12 @@ sub linguistic_annotation {
 
     starttimer();
     if ($ENABLE_TOKEN) {
-
+	
 	# Tokenize
 	Alvis::NLPPlatform::UserNLPWrappers->tokenize($h_config,$doc_hash);
 	# print STDERR $Alvis::NLPPlatform::Annotation::nb_max_tokens. "\n";
 	$time_tok+=endtimer();
+	print STDERR "\tTokenization Time : $time_tok\n";
 	push @{$doc_hash->{"log_processing0"}->{"comments"}},  "Tokenization Time : $time_tok";
 	
 	if ($Alvis::NLPPlatform::Annotation::nb_max_tokens >0) {
@@ -348,6 +354,7 @@ sub linguistic_annotation {
 		starttimer();
 		Alvis::NLPPlatform::UserNLPWrappers->scan_ne($h_config, $doc_hash);
 		$time_ne+=endtimer();
+		print STDERR "\tNamed Entity Recognition Time : $time_ne\n";
 		push @{$doc_hash->{"log_processing0"}->{"comments"}},  "Named Entity Recognition Time : $time_ne";
 	    }
 
@@ -356,6 +363,7 @@ sub linguistic_annotation {
 		starttimer();
 		Alvis::NLPPlatform::UserNLPWrappers->word_segmentation($h_config, $doc_hash);
 		$time_word+=endtimer();
+		print STDERR "\tWord Segmentation Time : $time_word\n";
 		push @{$doc_hash->{"log_processing0"}->{"comments"}},  "Word Segmentation Time : $time_word";
 	    }
 
@@ -375,6 +383,7 @@ sub linguistic_annotation {
 		starttimer();
 		if(!$dont_annotate){Alvis::NLPPlatform::UserNLPWrappers->sentence_segmentation($h_config, $doc_hash)};
 		$time_sent+=endtimer();
+		print STDERR "\tSentence Segmentation Time : $time_sent\n";
 		push @{$doc_hash->{"log_processing0"}->{"comments"}},  "Sentence Segmentation Time : $time_sent";
 	    }
 
@@ -383,6 +392,7 @@ sub linguistic_annotation {
 		starttimer();
 		if(!$dont_annotate){Alvis::NLPPlatform::UserNLPWrappers->pos_tag($h_config, $doc_hash)};
 		$time_pos+=endtimer();
+		print STDERR "\tPart of Speech Tagging Time : $time_pos\n";
 		push @{$doc_hash->{"log_processing0"}->{"comments"}},  "Part of Speech Tagging Time : $time_pos";
 	    }
 
@@ -391,6 +401,7 @@ sub linguistic_annotation {
 		starttimer();
 		if(!$dont_annotate){Alvis::NLPPlatform::UserNLPWrappers->term_tag($h_config, $doc_hash)};
 		$time_term+=endtimer();
+		print STDERR "\tTerm Tagging Time : $time_term\n";
 		push @{$doc_hash->{"log_processing0"}->{"comments"}},  "Term Tagging Time : $time_term";
 	    }
 
@@ -399,6 +410,7 @@ sub linguistic_annotation {
 		starttimer();
 		if(!$dont_annotate){Alvis::NLPPlatform::UserNLPWrappers->syntactic_parsing($h_config, $doc_hash)};
 		$time_synt+=endtimer();
+		print STDERR "\tSyntactic Parsing Time : $time_synt\n";
 		push @{$doc_hash->{"log_processing0"}->{"comments"}},  "Syntactic Parsing Time : $time_synt";
 	    }
 
@@ -430,6 +442,8 @@ defined by the descriptor given as parameter (in the given example,
 the standard output). C<$printCollectionHeaderFooter> indicates if the
 C<documentCollection> header and footer have to be printed.
 
+The function returns the time of the XML rendering.
+
 =cut
 
 sub standalone_main {
@@ -440,6 +454,7 @@ sub standalone_main {
 
     my $xmlhead="";#"<?xml version=\"1.0\" encoding=\"$charset\"?>\n<documentCollection xmlns=\"http://alvis.info/enriched/\" version=\"1.1\">\n";
     my $xmlfoot="";#</documentCollection>\n";
+
 
     my $doc_hash;
 
@@ -485,13 +500,18 @@ sub standalone_main {
     @word_end=();
 
     %last_words=();
+    @found_terms=();
+    @found_terms_tidx=();
+    @found_terms_smidx=();
+    @found_terms_phr=();
+    @found_terms_words=();
 
     @tab_errors=();
 
     starttimer();
 
 #     $doc_xml =~ s/("<\?xml version=\"1.0\" encoding=\"$charset\"?>\n
-    $doc_hash=Alvis::NLPPlatform::Annotation::load_xml($doc_xml);
+    $doc_hash=Alvis::NLPPlatform::Annotation::load_xml($doc_xml, $h_config);
     $time_load+=endtimer();
 
     # Recording computing data (time and entity size)
@@ -510,7 +530,7 @@ sub standalone_main {
     $doc_hash->{"log_processing0"}->{"comments"} = \@tmp_c;
 
     push @{$doc_hash->{"log_processing0"}->{"comments"}},  "XML loading Time : $time_load";
-
+    print STDERR "\tXML loading Time : $time_load\n";
     my @tmp_d;
     $doc_hash->{"log_processing1"}->{"comments"} = \@tmp_d;
     
@@ -528,6 +548,7 @@ sub standalone_main {
 	print STDERR "Rendering XML...  ";
 
 	starttimer();
+	push @{$doc_hash->{"log_processing0"}->{"comments"}},  "XML rendering Time : \@RENDER_TIME_NOT_SET\@";
 	Alvis::NLPPlatform::Annotation::render_xml($doc_hash, $descriptor, $printCollectionHeaderFooter);
 	$time_render+=endtimer();
 
@@ -536,6 +557,7 @@ sub standalone_main {
 	# Recording statistical data (time and entity size)
 	# XML rendering (unsuable)
 	print STDERR "done\n";
+	print STDERR "\tXML rendering Time : $time_render\n";
 	
     }else{
 	print STDERR "done parsing - no more documents.\n";
@@ -556,7 +578,7 @@ sub standalone_main {
 
 #     $time_total=$time_load+$time_tok+$time_ne+$time_word+$time_sent+$time_pos+$time_lemm+$time_term+$time_render;
 
-    return(0);
+    return($time_render);
 }
 
 =head2 client_main()
@@ -626,6 +648,11 @@ sub client_main {
     @word_end=();
 
     %last_words=();
+    @found_terms=();
+    @found_terms_smidx=();
+    @found_terms_tidx=();
+    @found_terms_phr=();
+    @found_terms_words=();
 
     @tab_errors=();
 
@@ -710,7 +737,7 @@ sub client
     my $doc_xml;
     my $connection_retry;
     my $sock=0;
-    
+    my $time_render;
     my $sig_handler = "";
 
     while(1) {
@@ -808,7 +835,7 @@ sub client
 	my $doc_hash;
     
 	Alvis::NLPPlatform::starttimer();
-	$doc_hash=Alvis::NLPPlatform::Annotation::load_xml($doc_xml);
+	$doc_hash=Alvis::NLPPlatform::Annotation::load_xml($doc_xml, \%config);
 	my $time_load+=Alvis::NLPPlatform::endtimer();
 
 	# Recording computing data (time and entity size)
@@ -854,23 +881,30 @@ sub client
 	
 	print STDERR "Established connection to server.\n";
 	
-	print STDERR "Giving back annotated document...";
+	print STDERR "Giving back annotated document...\n";
 	# Communitation with the server
 	print $sock "GIVEBACK\n$id\n";
 	
 	# Save to XML file
 
-	print STDERR "Rendering XML...  ";
+	print STDERR "\tRendering XML...  ";
 
+	starttimer();
+	push @{$doc_hash->{"log_processing0"}->{"comments"}},  "XML rendering Time : \@RENDER_TIME_NOT_SET\@";
 	Alvis::NLPPlatform::Annotation::render_xml($doc_hash, $sock, 1);
+	$time_render+=endtimer();
 
 # TODO : recording the xml rendering time
 	print STDERR "done\n";
     
 	print $sock "<DONE>\n";
-
+	
 	print STDERR "done.\n";
 	
+	# the render time is sent
+
+	print $sock "RENDER TIME\n$time_render\n";
+
 	print STDERR "Awaiting acknowledgement...";
 	my $line;
 	while($line=<$sock>){
@@ -889,7 +923,7 @@ sub client
 	$SIG{'INT'} = $sig_handler;
 	print STDERR "Closed connection to server.\n";
     }
-
+    return($time_render);
 }
 
 
@@ -975,8 +1009,8 @@ sub server
 
     #  header and footer
 
-    my $xmlhead=""; #<?xml version=\"1.0\" encoding=\"$charset\"?>\n<documentCollection xmlns=\"http://alvis.info/enriched/\" version=\"1.1\">\n";
-    my $xmlfoot=""; #</documentCollection>\n";
+    my $xmlhead="<?xml version=\"1.0\" encoding=\"$charset\"?>\n<documentCollection xmlns=\"http://alvis.info/enriched/\" version=\"1.1\">\n";
+    my $xmlfoot="</documentCollection>\n";
 
     # connection to the crawler
 
@@ -1150,11 +1184,24 @@ sub server
 		    {
 			while((defined $sock) && ($line=<$client_sock>) && ($line ne "<DONE>\n")) {
 			    # recording the annotation document (local)
-			    if ($config{"NLP_misc"}->{"SAVE_IN_OUTDIR"}) {print O $line;}
 			    # building xml string for sending to the next step
 			    $xml .= $line;
 			}
-			if ($config{"NLP_misc"}->{"SAVE_IN_OUTDIR"}) {close(O);}
+			# get the RENDER TIME
+			if ((defined $sock) && ($line = <$client_sock>) && ($line eq "RENDER TIME\n")) {
+			    if ((defined $sock) && ($line = <$client_sock>)) {
+				chomp $line;
+				$xml =~ s/\@RENDER_TIME_NOT_SET\@/$line/;
+			    } else {
+				warn "\n***\nValue of nrender time is not sent\n***\n\n";
+			    }
+		        } else {
+			    warn "\n***\nRender time is not sent\n***\n\n";
+			}
+			if ($config{"NLP_misc"}->{"SAVE_IN_OUTDIR"}) {
+			    print O $xml;
+			    close(O);
+			}
 			# sending the annotated document to the newt step
 			if ($config{"alvis_connection"}->{"NEXTSTEP"}) {
 			    warn "Sending the annotated document to the next step... \n";
@@ -1278,7 +1325,7 @@ sub split_to_docRecs
 	warn "Parsing the doc failed: $@. Trying to get the IDs..\n";
 	eval
 	{
-	    $xml=~s/<documentRecord\s+id\s*=\s*\"([^\"]*?)\">/&unparseable_id($1)/esgo;
+	    $xml=~s/<documentRecord\s(xmlns=[^\s]+)*\sid\s*=\s*\"([^\"]*?)\">/&unparseable_id($2)/esgo;
 	};
     }
     else
@@ -1429,10 +1476,9 @@ sub init_server {
 #     warn "Receiving SIGINT -- Aborting any NL processing\n";
 
     my $pipe_out = new Alvis::Pipeline::Write(host => "localhost", 
-					      port => $r_config->{"alvis_connection"}->{"HARVESTER_PORT"}, 
-					      loglevel => 10)
-	or die "can't create ALVIS write-pipe for port '" . $r_config->{"alvis_connection"}->{"HARVESTER_PORT"} . "': $!";
-
+					       port => $r_config->{"alvis_connection"}->{"HARVESTER_PORT"}, 
+					       loglevel => 10)
+	    or die "can't create ALVIS write-pipe for port '" . $r_config->{"alvis_connection"}->{"HARVESTER_PORT"} . "': $!";
     my $file_id = $r_config->{ALVISTMP} . "/.proc_id";
     my $fh = new IO::File("+<$file_id")
 	or die "can't read '$file_id': $!";
@@ -1473,13 +1519,13 @@ variables and divided into several sections:
 
 =item * Global variables.
 
-The two mandatory variables are C<ALVISTMP> and
- C<PRESERVEWHITESPACE>. C<ALVISTMP> defines the temporary directory
- used during the annotation process. It must be writable to the user
- the process is running as. C<$preserveWhiteSpace> is a boolean
- indicating if the linguistic annotation will be done by preserving
- white space or not, i.e. XML blank nodes and white space at the
- beginning and the end of any line.
+The two mandatory variables are C<ALVISTMP> and C<PRESERVEWHITESPACE>
+ (in the XML_INPUT section). C<ALVISTMP> defines the temporary
+ directory used during the annotation process. It must be writable to
+ the user the process is running as. C<$preserveWhiteSpace> is a
+ boolean indicating if the linguistic annotation will be done by
+ preserving white space or not, i.e. XML blank nodes and white space
+ at the beginning and the end of any line.
 
 Additional variables and environement variables can be used if they
 are interpolated in the configuration file. For instance, in the
@@ -1553,7 +1599,32 @@ the clients attempts to connect to the server.
 
 =back
 
+=item * C<XML_INPUT>
 
+=over 8
+
+=item C<PRESERVEWHITESPACE>: this option takes into account or xml
+blank nodes and indentation of the text in the
+canonicalDocument. Default value is C<0> or false (blank nodes and
+indentation characters are removed).
+
+
+=item C<LINGUISTIC_ANNOTATION_LOADING>: The linguistic annotations
+already existing in the input documents are loaded or not. Default
+value is c<1> or true (linguistic annotations are loaded).
+
+=back
+
+
+=item * C<XML_OUTPUT>
+
+=over 8
+
+=item FORM
+
+=item ID
+
+=back
 
 
 =item * Section C<linguistic_annotation>
@@ -1919,7 +1990,8 @@ BioLG:
 
 =item * Obtain:
 
- http://www-lipn.univ-paris13.fr/~hamon/ALVIS/Tools/biolgForAlvis.tar.gz
+
+  http://www.it.utu.fi/biolg/
 
 =item * Install:
 
@@ -1938,7 +2010,7 @@ BioLG:
 
 =item * Version number required:
 
- 1.1.7b
+ 1.1.10
 
 =back
 

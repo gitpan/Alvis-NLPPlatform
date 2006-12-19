@@ -12,7 +12,7 @@ WriteMakefile(
                            IO::Socket => 0,
                            XML::Parser::PerlSAX => 0,
                            Data::Dumper => 0,
-                           Alvis::TermTagger => 0,
+                           Alvis::TermTagger => 0.3,
                            Alvis::Pipeline => 0,
                            XML::LibXML => 0,
                            IO::File => 0,

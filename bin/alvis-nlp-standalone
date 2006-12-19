@@ -64,6 +64,8 @@ use Pod::Usage;
 use Config::General;
 use Data::Dumper;
 
+use Sys::Hostname;
+
 # Process Option
 
 my $man = 0;
@@ -94,10 +96,32 @@ my @tab_docs_xml = Alvis::NLPPlatform::split_to_docRecs($doc_xml);
 Alvis::NLPPlatform::Annotation::print_documentCollectionHeader(\*STDOUT);
 
 my $i;
+my $render_time;
+my $stdout_cur_pos;
+my $stdout_start_pos;
+my @cur_doc;
+my $j;
+my $tmpfile;
+my $HOSTNAME=hostname;
+       
 
 for($i = 0; $i<scalar(@tab_docs_xml); $i++) {
-    Alvis::NLPPlatform::standalone_main(\%config, ${$tab_docs_xml[$i]}[1], \*STDOUT, 0);
+    $tmpfile = $config{'ALVISTMP'} . "/$HOSTNAME.$$.outfile";
+    open FILETMP_OUT, ">$tmpfile";
+    $render_time = Alvis::NLPPlatform::standalone_main(\%config, ${$tab_docs_xml[$i]}[1], \*FILETMP_OUT, 0);
+    close(FILETMP_OUT);
+
+    open FILETMP_OUT, "$tmpfile" or die "No such file or directory\n";
+    @cur_doc = <FILETMP_OUT>;
+    $j = 0;
+    while(($j< scalar @cur_doc) && ($cur_doc[$j] !~ s/\@RENDER_TIME_NOT_SET\@/$render_time/)) {
+	$j++;
+    }
+    close(FILETMP_OUT);
+    unlink $tmpfile;
+    print @cur_doc;
 }
 
 Alvis::NLPPlatform::Annotation::print_documentCollectionFooter(\*STDOUT);
+
 

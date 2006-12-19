@@ -250,8 +250,8 @@ sub syntactic_parsing
     
     my $class = shift @arg;
 
-      $class->SUPER::syntactic_parsing(@arg);
-#      &bio_syntactic_parsing(@arg);
+       $class->SUPER::syntactic_parsing(@arg);
+#        &bio_syntactic_parsing(@arg);
 }
 
 
@@ -325,8 +325,28 @@ sub bio_syntactic_parsing {
     push @tab_word," ";
     my $decal=1;
 
+    my $searchterm;
+    my $sti;
+    my $word_np;
+	    
+    my @tab_tmp;
+    my $tmp_sp;
+    my $spi=0;
+
+    my $termsfound=0;
+    my $stubs=0;
+
+    my $skip=0;
+
+    my @tab_start_term=();
+    my @tab_end_term=();
+
 
     foreach $word(Alvis::NLPPlatform::Annotation::sort(\%Alvis::NLPPlatform::hash_words_punct)){
+	if($skip>0){
+	    $skip--;
+#	    next;
+	}
 	# print word
 	$word_cont=$Alvis::NLPPlatform::hash_words_punct{$word};
 	push @tab_word_punct,$word_cont;
@@ -343,7 +363,92 @@ sub bio_syntactic_parsing {
 	    $sentences_cont.="</sentence>\n";
 	    $sentences_cont.="<sentence>\n";
 	}else{
-	    $sentences_cont.="<w c=\"$postag\">$word_cont</w>\n";
+	    # determine if current word is part of a term
+	    $searchterm="";
+	    @tab_tmp=();
+	    $tmp_sp=0;
+
+	    $word_np=$Alvis::NLPPlatform::hash_words{"word$decal"};
+	    for($sti=0;$sti<scalar @Alvis::NLPPlatform::found_terms;$sti++){
+		my $ref_tab_tmp_words;
+		$searchterm=$Alvis::NLPPlatform::found_terms[$sti];
+#		print STDERR "Searching for term $searchterm / comparing with word ".$Alvis::NLPPlatform::hash_words{"word$decal"}."\n";
+		$ref_tab_tmp_words=$Alvis::NLPPlatform::found_terms_words[$sti];
+#		print STDERR "word$decal- Searching for term ($sti) $searchterm / words ";
+#		print STDERR join ",",@$ref_tab_tmp_words;
+#		print STDERR "\n";
+
+		if(lc($Alvis::NLPPlatform::hash_words{"word$decal"}) eq lc($searchterm)){
+		    # look for one-word terms
+#		    print STDERR "\n--== Found term $searchterm ==--\n";
+#		    print STDERR "word$decal makes up '$searchterm' on its own (single word/NE).\n";
+		    $termsfound++;
+		    push @Alvis::NLPPlatform::found_terms_tidx,$sti;
+		    $sti=scalar @Alvis::NLPPlatform::found_terms;
+		    $tmp_sp=1;
+		    last;
+		}else{
+		    # look for multiple word terms (they have to be phrases)
+		    if($Alvis::NLPPlatform::found_terms_phr[$sti] != -666){
+			# determine if the current word ($decal) is part of it
+			# then set $tmp_sp to the nb of words involved
+			if(@$ref_tab_tmp_words[0] eq "word$decal"){
+			    # the current word is the first word of the term
+#			    print STDERR "word$decal is the first word of the term '$searchterm'.\n";
+			    $termsfound++;
+			    push @Alvis::NLPPlatform::found_terms_tidx,$sti;
+			    $sti=scalar @Alvis::NLPPlatform::found_terms;
+			    $tmp_sp=scalar @$ref_tab_tmp_words;
+			    last;
+			}
+		    }
+		    
+###############################################
+# 		    if($searchterm=~/^$word_np/i){
+# 			print STDERR "\n--== $word_np is the beginning of $searchterm ==--\n";
+# 			$stubs++;
+
+# 			@tab_tmp=split / /,$searchterm;
+# 			$tmp_sp=scalar @tab_tmp;
+#		        print STDERR "--== $tmp_sp words, right? ==--\n";
+# 			$skip=$tmp_sp;
+
+# 			for($spi=$decal+1;$spi<$decal+$tmp_sp;$spi++){
+# 			    $word_np.=" ".$Alvis::NLPPlatform::hash_words{"word$spi"};
+# 			}
+# 			print STDERR "--== Rebuilt term to $word_np ==--\n";
+# 			$termsfound++;
+# 			push @Alvis::NLPPlatform::found_terms_tidx,$sti;
+# 			$sti=scalar @Alvis::NLPPlatform::found_terms;
+# 			last;
+# 		    }
+###############################################
+		}
+		$searchterm="";
+	    }
+	    #
+	    if($searchterm eq ""){
+		# there was no term
+		$sentences_cont.="<w c=\"$postag\">$word_cont</w>\n";
+	    }else{
+		# there was a term
+#		print STDERR "Searchterm : $searchterm\n";
+#		print STDERR "word_np : $word_np\n";
+		$sentences_cont.="<term c=\"$postag\" parse_as=\"$word_cont.n\" internal=\"\" head=\"0\">\n";
+		# insert all the words that make up this term
+		my $nbsteps=$decal+$tmp_sp;
+		if($nbsteps==$decal){
+		    $nbsteps++;
+		}
+		push @tab_start_term,$decal;
+		push @tab_end_term,($nbsteps-1);
+		for($spi=$decal;$spi<$nbsteps;$spi++){
+		    $sentences_cont.="<w c=\"NN\">".$Alvis::NLPPlatform::hash_words{"word$spi"}."</w>\n";
+#		    print STDERR "Adding ".$Alvis::NLPPlatform::hash_words{"word$spi"}."\n";
+		}
+		##
+		$sentences_cont.="</term>\n";
+	    }
 	}
 
 	$decal++;
@@ -375,7 +480,7 @@ sub bio_syntactic_parsing {
 	$ne_cont=$Alvis::NLPPlatform::hash_named_entities{$ne};
 	$ne_mod=$ne_cont;
 	if($ne_cont=~/ /){
-	    if($sentences_cont=~/$ne_cont/){
+	    if($sentences_cont=~/\Q$ne_cont\E/){
 		$ne_mod=~s/ /\_/g;
 		$sentences_cont=~s/$ne_cont/$ne_mod/g;
 	    }
@@ -395,9 +500,6 @@ sub bio_syntactic_parsing {
 	$command_line = $h_config->{'NLP_tools'}->{'SYNTACTIC_ANALYSIS_EN'} . " < " . $h_config->{'TMPFILE'} . ".corpus.tmp > " . $h_config->{'TMPFILE'} . ".result.tmp 2> /dev/null";
     }
     `$command_line`;
-
-#    print STDERR $h_config->{'TMPFILE'}. ".corpus.tmp" . "\n";
-    unlink $h_config->{'TMPFILE'}. ".corpus.tmp";
 
     # process syntactic analysis
 
@@ -421,12 +523,14 @@ sub bio_syntactic_parsing {
 	if($insentence==1){
 	    $sentence.=$line;
 	}
+# 	if(index($line,"diagram")==0){
 	if(index($line,"[]")==0){
 	    # process the line
 	    $sentence=~s/\[Sentence\s+[0-9]+\]//sgo;
 	    $sentence=~s/\[Linkage\s+[0-9]+\]//sgo;
 	    $sentence=~s/\[\]//sgo;
 	    $sentence=~s/\n//sgo;
+# 	    $sentence=~s/\[[0-9\s]*\]diagram$//g;
 	    if ($sentence=~m/^(.+)\[\[/) {
 		$tokens=$1;
 	#	print STDERR "\n\n--> $sentence\n\n";
@@ -459,15 +563,22 @@ sub bio_syntactic_parsing {
 # 	    }
 
 		# Parsing
+		my $valid_analysis;
 		while($analyses=~/(\[[0-9]+\s[0-9]+\s[0-9]+\s[^\]]+\])/sgoc){
+		    my $kref=0;
 		    $analysis=$1;
-		    $analysis=~m/\[([0-9]+)\s([0-9]+)\s([0-9]+)\s\(([^\]]+)\)\]/sgo;
+		    if($analysis=~m/\[([0-9]+)\s([0-9]+)\s([0-9]+)\s\(([^\]]+)\)\]/sgo){ # m??
+			$valid_analysis=1;
+		    }else{
+			$valid_analysis=0;
+		    }
 		    $token_start=$1;
 		    $token_end=$2;
 		    $relation=$4;
 		    if(
 		       (($left_wall==1)&&(($token_start==0) || ($token_end==0)))
 		       ||(($right_wall==1)&&(($token_start==$last_token) || ($token_end==$last_token)))
+			|| ($valid_analysis==0)
 		       ){
 			# ignore any relation with the left or right wall
 #		    print STDERR "$relation [$token_start $token_end] ==> ignored\n";
@@ -479,22 +590,67 @@ sub bio_syntactic_parsing {
 			# make sure we're not dealing with punctuation, otherwise just ignore
 			my $tmp1=$token_start+$wordidshift;
 			my $tmp2=$token_end+$wordidshift;
+			my $tmp1_within=0;
+			my $tmp2_within=0;
 			if(($tmp1 < scalar @tab_mapping) && ($tmp2 < scalar @tab_mapping)){
 # 			print STDERR "$tmp1 $tmp2\n";
 # 			if (defined($tab_mapping[$tmp1])) { print STDERR $tab_mapping[$tmp1] . "\n";}
 # 			if (defined($tab_mapping[$tmp2])) { print STDERR $tab_mapping[$tmp2] . "\n";}
 			    if ((defined($tab_mapping[$tmp1])) && (defined($tab_mapping[$tmp2])) && ($tab_mapping[$tmp1] ne "") && ($tab_mapping[$tmp2] ne "")){
+				# determine if there is a relation between a word inside a term and another word not inside a term
+				my $lft;
+				for($lft=0;$lft<scalar @tab_start_term;$lft++){
+				    # is head within term?
+				    if(
+				    ($tab_mapping[$tmp1]>=$tab_start_term[$lft] &&
+					$tab_mapping[$tmp1]<=$tab_end_term[$lft])
+					){
+					$tmp1_within=1;
+				    }
+
+				    # is modifier within term?
+				    if(
+				    ($tab_mapping[$tmp2]>=$tab_start_term[$lft] &&
+					$tab_mapping[$tmp2]<=$tab_end_term[$lft])
+					){
+					$tmp2_within=1;
+				    }
+
+				    # rules set here:
+				    # relation between two words in a term: W-W relation
+				    # relation between two words outside of a term: W-W relation
+				    # relation between a word in a term and another word outside this term: W-P relation
+				    if(($tmp1_within+$tmp2_within)==1){
+					# one of them is in, the other is out
+#					print STDERR "\n";
+					# find term id
+					$kref=$Alvis::NLPPlatform::found_terms_tidx[$lft];
+					$kref++; # it's always >0
+					last;
+				    }
+				}
 				$doc_hash->{"syntactic_relation$relation_id"}={};
 				$doc_hash->{"syntactic_relation$relation_id"}->{'id'}="syntactic_relation$relation_id";
 				$doc_hash->{"syntactic_relation$relation_id"}->{'datatype'}="syntactic_relation";
 				$doc_hash->{"syntactic_relation$relation_id"}->{'syntactic_relation_type'}="$relation";
 				$doc_hash->{"syntactic_relation$relation_id"}->{'refid_head'} = {};
 				$doc_hash->{"syntactic_relation$relation_id"}->{'refid_head'}->{'datatype'}="refid_head";
-				$doc_hash->{"syntactic_relation$relation_id"}->{'refid_head'}->{"refid_word"}="word".$tab_mapping[($token_start+$wordidshift)];
+				if(($kref>0)&&($tmp1_within==1)&&($Alvis::NLPPlatform::found_terms_phr[($kref-1)]!=-666)){
+				    $doc_hash->{"syntactic_relation$relation_id"}->{'refid_head'}->{"refid_phrase"}="phrase".$Alvis::NLPPlatform::found_terms_phr[($kref-1)];
+#				    print STDERR "\n\nSize: ".scalar @Alvis::NLPPlatform::found_terms_phr."\n";
+#				    print STDERR "Index: $kref\n\n";
+				}else{
+				    $doc_hash->{"syntactic_relation$relation_id"}->{'refid_head'}->{"refid_word"}="word".$tab_mapping[($token_start+$wordidshift)];
+				}
 # 				$doc_hash->{"syntactic_relation$relation_id"}->{'refid_head'}="word".$tab_mapping[($token_start+$wordidshift)];
 				$doc_hash->{"syntactic_relation$relation_id"}->{'refid_modifier'} = {};
 				$doc_hash->{"syntactic_relation$relation_id"}->{'refid_modifier'}->{'datatype'}="refid_modifier";
-				$doc_hash->{"syntactic_relation$relation_id"}->{'refid_modifier'}->{"refid_word"}="word".$tab_mapping[($token_end+$wordidshift)];
+				if(($kref>0)&&($tmp2_within==1)&&($Alvis::NLPPlatform::found_terms_phr[($kref-1)]!=-666)){
+				    $doc_hash->{"syntactic_relation$relation_id"}->{'refid_modifier'}->{"refid_phrase"}="phrase".$Alvis::NLPPlatform::found_terms_phr[($kref-1)];
+#				    print STDERR "\n\nIndex: $kref\n\n";
+				}else{
+				    $doc_hash->{"syntactic_relation$relation_id"}->{'refid_modifier'}->{"refid_word"}="word".$tab_mapping[($token_end+$wordidshift)];
+				}
 # 				$doc_hash->{"syntactic_relation$relation_id"}->{'refid_modifier'}="word".$tab_mapping[($token_end+$wordidshift)];
 				
 				$relation_id++;
@@ -512,11 +668,13 @@ sub bio_syntactic_parsing {
     }
     close SYN_RES;
 
+#    print STDERR $h_config->{'TMPFILE'}. ".corpus.tmp" . "\n";
+    unlink $h_config->{'TMPFILE'}. ".corpus.tmp";
     unlink $h_config->{'TMPFILE'} . ".result.tmp";
 
     $Alvis::NLPPlatform::nb_relations=$relation_id-1;
 
-    print STDERR "done - Found $Alvis::NLPPlatform::nb_relations relations.\n";
+    print STDERR "done - Found $Alvis::NLPPlatform::nb_relations relations, $termsfound full terms, $stubs stubs.\n";
 }
 
 

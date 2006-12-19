@@ -10,6 +10,8 @@ use XML::Parser::PerlSAX;
 
 use Alvis::NLPPlatform::XMLEntities;
 
+use Data::Dumper;
+
 =head1 NAME
 
 Alvis::NLPPlatform::MyReceiver - Internal Perl extension for analysing XML
@@ -77,89 +79,111 @@ sub new {
   my $tab_objet = {};
   my $is_in_ann;
 #   my $data;
-  return bless {"tab_object" => {} , "stack_elements" => \@stack_elements, "is_in_ann" => $is_in_ann } , $type;
+  return bless {"tab_object" => {} , "stack_elements" => \@stack_elements, "is_in_ann" => $is_in_ann, "counter_id" => 0 } , $type;
 }
 
 #
 # process <..>
 #
 
+
 sub start_element {
   my ($self,$properties) = @_;
 
   if ($self->{"is_in_ann"}) {
-    if ($self->is_empty()) { # new element
-      my $elem = {};
-      $elem->{'datatype'} = $properties->{'Name'};
-      push(@{$self->{"stack_elements"}},$elem);
-      $elem->{'kind'} = 'simple';
-    } else {
-      my $father = $self->top_stack();
-      my $elem;
-      if ($properties->{'Name'} =~ /^list/) { # detects that it is a list
-	$elem = {}; # hashtable par défaut
-	$elem->{'kind'} = 'list';
-	$elem->{'values'} = []; # tableau
+      if ($self->is_empty()) { # new element
+	  my $elem = {};
+	  push(@{$self->{"stack_elements"}},$elem);
+	  $elem->{'kind'} = 'simple';
       } else {
-	$elem = {}; # hashtable par défaut
-	$elem->{'kind'} = 'simple';	
+	  my $father = $self->top_stack();
+	  my $elem;
+	  if ($properties->{'Name'} =~ /^list/) { # detects that it is a list
+	      $elem = {}; # hashtable par défaut
+	      $elem->{'kind'} = 'list';
+	      $elem->{'values'} = []; # tableau
+	  } else {
+	      $elem = {}; # hashtable par défaut
+	      $elem->{'kind'} = 'simple';	
+	  }
+	  if ($father->{'kind'} eq 'list') {
+	      my $tab = $father->{'values'};
+	  } else { # complex or simple
+	      $father->{'kind'} = 'complex';
+	      $father->{$properties->{'Name'}} = $elem;
+	  }
+	  $elem->{'datatype'} = $properties->{'Name'};
+	  push(@{$self->{"stack_elements"}},$elem);
       }
-      if ($father->{'kind'} eq 'list') {
-	my $tab = $father->{'values'};
-      } else { # complex or simple
-	$father->{'kind'} = 'complex';
-	$father->{$properties->{'Name'}} = $elem;
-      }
-      $elem->{'datatype'} = $properties->{'Name'};
-      push(@{$self->{"stack_elements"}},$elem);
-    }
   } else {
-#    $is_in_ann = $properties->{'Name'} eq 'ann';
-    $self->{"is_in_ann"} = $properties->{'Name'} eq 'linguisticAnalysis';
-#     print $self->{"is_in_ann"} . $properties->{"Name"} . "\n";
+      $self->{"is_in_ann"} = $properties->{'Name'} eq 'linguisticAnalysis';
 
   }
   $data='';
 }
 
 sub end_element {
-  my ($self,$properties) = @_;
-  if ($self->{"is_in_ann"}) {
-#    $is_in_ann = $properties->{'Name'} ne 'ann';
-    $self->{"is_in_ann"} = $properties->{'Name'} ne 'linguisticAnalysis';
+    my ($self,$properties) = @_;
+    my $field;
+    my $father;
     if ($self->{"is_in_ann"}) {
-      my $size=$#{$self->{"stack_elements"}};
-      my $elem = $self->top_stack();
-      if ($size >= 1) {
-	my $father = $self->snd_stack();
-	my $field = $elem->{'datatype'};
-	if ($father->{'kind'} eq 'list') {
-	  my $tab = $father->{'values'};
-	  if ($elem->{'kind'} eq 'simple') {
-	    push(@$tab,$data);
-	  } else {
-	    push(@$tab,$elem);
-	  }
-	} else {
-	  if ($elem->{'kind'} eq 'simple') {
-	    $father->{$field} = $data; # replace hashtable that has been created by default
-	  }
+	$self->{"is_in_ann"} = $properties->{'Name'} ne 'linguisticAnalysis';
+	if ($self->{"is_in_ann"}) {
+	    my $size=$#{$self->{"stack_elements"}};
+	    my $elem = $self->top_stack();
+	    if ($size >= 1) {
+		if ($properties->{'Name'} eq "named_entity") {
+		    if (!exists($elem->{'id'})) {
+			my $ftab = $elem->{'values'};
+			push (@$ftab, "named_entity" . $self->{"counter_id"});
+			$elem->{'id'} = "named_entity" . $self->{"counter_id"};
+			$field = 'id';
+			$data = "semantic_unit" . $self->{"counter_id"};
+			$self->{"counter_id"}++;
+		    }  else {
+ 			$field = $elem->{'datatype'};
+ 		    }
+		    $father = {'named_entity'=> $elem, 'datatype' => 'semantic_unit'};
+		} else {
+		    $field = $elem->{'datatype'};
+		    $father = $self->snd_stack();
+		    if ((exists $father->{'datatype'}) && ($father->{'datatype'} eq "named_entity") && ($field eq "id")) {
+			$father->{'id'} = $data;
+			$father = {'named_entity'=> $father, 'datatype' => 'semantic_unit'};
+			$elem->{'kind'} = 'complex';
+ 			$data =~ /([0-9]+)$/;
+ 			$data = "semantic_unit$1";
+			
+		    }
+		}
+		
+		if ((exists $father->{'kind'}) && ($father->{'kind'} eq 'list')) {
+		    my $tab = $father->{'values'};
+		    if ((exists $elem->{'kind'}) && ($elem->{'kind'} eq 'simple')) {
+			push(@$tab,$data);
+		    } else {
+			push(@$tab,$elem);
+		    }
+		} else {
+		    if ((exists $elem->{'kind'}) && ($elem->{'kind'} eq 'simple')) {
+			$father->{$field} = $data; # replace hashtable that has been created by default
+		    }
+		}
+		if ($field eq 'id') {
+		    $self->{"tab_object"}->{$data} = $father;
+		    #print Dumper($tab_object);
+		}
+		if ($elem->{'kind'} eq 'list') {
+		    # replace : list-xxx=>{'value'=>[...]}
+		    # by      : list-xxx=>[...]
+		    $father->{$elem->{'datatype'}} = $elem->{'values'};
+		}
+	    }
+	    delete($elem->{'kind'});	# kind is only used by process
+	    #delete($elem->{'datatype'}); # optionnal
+	    pop(@{$self->{"stack_elements"}});
 	}
-	if ($field eq 'id') {
-	  $self->{"tab_object"}->{$data} = $father;
-	  #print Dumper($tab_object);
-	}
-	if ($elem->{'kind'} eq 'list') {
-	  # replace : list-xxx=>{'value'=>[...]}
-	  # by      : list-xxx=>[...]
-	  $father->{$elem->{'datatype'}} = $elem->{'values'};
-	}
-      }
-      delete($elem->{'kind'});	# kind is only used by process
-      #delete($elem->{'datatype'}); # optionnal
-      pop(@{$self->{"stack_elements"}});
     }
-  }
 }
 
 # Function "characters" corrected by Julien Deriviere

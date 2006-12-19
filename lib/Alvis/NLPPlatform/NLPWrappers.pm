@@ -1,8 +1,13 @@
 package Alvis::NLPPlatform::NLPWrappers;
 
+#use diagnostics;
 use strict;
 
 use Alvis::NLPPlatform::Annotation;
+use Alvis::TermTagger;
+
+my @term_list;
+my @regex_term_list;
 
 =head1 NAME
 
@@ -106,10 +111,10 @@ sub tokenize
     print STDERR "  Tokenizing...           ";
     
     $canonical=$Alvis::NLPPlatform::Annotation::canonicalDocument;
-    Alvis::NLPPlatform::Canonical::CleanUp($canonical, $h_config->{"PRESERVEWHITESPACE"});
+    Alvis::NLPPlatform::Canonical::CleanUp($canonical, $h_config->{"XML_INPUT"}->{"PRESERVEWHITESPACE"});
+#     Alvis::NLPPlatform::Canonical::CleanUp($canonical, $h_config->{"PRESERVEWHITESPACE"});
 
     @lines=split /\n/,$canonical;
-
 
 
     map {$_ .= "\n"} @lines;
@@ -224,16 +229,15 @@ sequences are also assumed to be equivalent to nouns: the tagger
 dynamically produces linguistic units equivalent to words or noun
 phrases.
 
-C<$hash_config> is the
-reference to the hashtable containing the variables defined in the
-configuration file.
+C<$hash_config> is the reference to the hashtable containing the
+variables defined in the configuration file.
 
-We integrated  TagEn (Jean-François
-Berroyer. I<TagEN, un analyseur d"entités nommées : conception,
-développement et évaluation>. Université Paris-Nord,
-France. 2004. Mémoire de D.E.A. d'Intelligence Artificielle), as default named entity tagger, which
-is based on a set of linguistic resources and grammars. TagEn can be
-downloaded here:
+We integrated TagEn (Jean-Francois Berroyer. I<TagEN, un analyseur
+d'entites nommees : conception, developpement et
+evaluation>. Universite Paris-Nord, France. 2004. Memoire de
+D.E.A. d'Intelligence Artificielle), as default named entity tagger,
+which is based on a set of linguistic resources and grammars. TagEn
+can be downloaded here:
 http://www-lipn.univ-paris13.fr/~hamon/ALVIS/Tools/TagEN.tar.gz
 
 =cut
@@ -284,8 +288,13 @@ sub scan_ne
     while($line=<REN>){
 	$line=~m/(.+)\s+([0-9]+)\s+([0-9]+)/;
 	push @Alvis::NLPPlatform::en_type,$1;
-	push @Alvis::NLPPlatform::en_start,$2;
-	push @Alvis::NLPPlatform::en_end,$3;
+	if ((exists($h_config->{'XML_INPUT'}->{"PRESERVEWHITESPACE"})) && ($h_config->{'XML_INPUT'}->{"PRESERVEWHITESPACE"})) {
+	    push @Alvis::NLPPlatform::en_start,($2-1);
+	    push @Alvis::NLPPlatform::en_end,($3-1);
+	} else {
+	    push @Alvis::NLPPlatform::en_start,$2;
+	    push @Alvis::NLPPlatform::en_end,$3;
+	}
     }
     close REN;
 
@@ -311,6 +320,8 @@ sub scan_ne
     @Alvis::NLPPlatform::en_tokens_end=();
     %Alvis::NLPPlatform::en_tokens_hash=();
     $number_of_tokens=scalar @tab_tokens;
+
+    $en=$Alvis::NLPPlatform::last_semantic_unit+1;
     $last_en=0;
 
     for($t=0;$t<$number_of_tokens;$t++){
@@ -931,6 +942,7 @@ sub pos_tag
 	    
 	    if((index($lemma,"_")>-1)&&(index($inflected,"_")==-1)){
 		$lemma=~s/\_/ /g;
+		$tag="NP";
 	    }
 	    
 	    if($lemma eq '@card@'){
@@ -1068,39 +1080,71 @@ sub term_tag
     my $term;
     my $phrase_idx=1;
     my $canonical_form;
+    my %corpus;
+    my %lc_corpus;
+    my $sent_id;
+    my $command_line;
+    my %corpus_index;
+    my %idtrm_select;
+    my @tab_results;
+
 
     print STDERR "  Term tagging...         ";
 
-    open CORPUS,">" . $h_config->{'TMPFILE'} . ".corpus.tmp";
-    binmode(CORPUS,":utf8");
+#     open CORPUS,">" . $h_config->{'TMPFILE'} . ".corpus.tmp" or die "Cannot create input file for term tagger";
+#     binmode(CORPUS,":utf8");
+
+    $sent_id = 1;
     foreach $sentence(Alvis::NLPPlatform::Annotation::sort(\%Alvis::NLPPlatform::hash_sentences)){
 	$tmp = "$Alvis::NLPPlatform::hash_sentences{$sentence}\n";
 	$tmp=~s/\n/\\n/g;
 	$tmp=~s/\r/\\r/g;
 	$tmp=~s/\t/\\t/g;
-	print CORPUS "$tmp\n";
-
+	$corpus{$sent_id} = $tmp;
+	$lc_corpus{$sent_id} = lc($tmp);
+# 	print CORPUS "$tmp\n";
+	$sent_id++;
     }
-    my $command_line;
+#     close CORPUS;
+
+
+    # Term list loading 
+
+    if (scalar(@term_list) == 0) {
+	if($Alvis::NLPPlatform::Annotation::ALVISLANGUAGE eq "FR"){
+	    Alvis::TermTagger::load_TermList($h_config->{'NLP_misc'}->{'TERM_LIST_FR'},\@term_list);
+	  } else {
+	      Alvis::TermTagger::load_TermList($h_config->{'NLP_misc'}->{'TERM_LIST_EN'},\@term_list);
+	    }
+	Alvis::TermTagger::get_Regex_TermList(\@term_list, \@regex_term_list);
+      }
+
+
+    Alvis::TermTagger::corpus_Indexing(\%lc_corpus, \%corpus_index);
+    Alvis::TermTagger::term_Selection(\%corpus_index, \@term_list, \%idtrm_select);
+#     Alvis::TermTagger::term_tagging_offset(\@term_list, \@regex_term_list, \%idtrm_select, \%corpus, $h_config->{'TMPFILE'} . ".result.tmp");
+     Alvis::TermTagger::term_tagging_offset_tab(\@term_list, \@regex_term_list, \%idtrm_select, \%corpus, \%tabh_sent_terms);
+
     
-    if($Alvis::NLPPlatform::Annotation::ALVISLANGUAGE eq "FR"){
-# 	$command_line = $h_config->{"NLP_tools"}->{"TERM_TAG_FR"} . " " . $h_config->{'NLP_misc'}->{'TERM_LIST_FR'} . " " . $h_config->{'TMPFILE'} . ".tempo " . $h_config->{'TMPFILE'} . ".result.tmp < " . $h_config->{'TMPFILE'} . ".corpus.tmp 2> /dev/null";
-	$command_line = $h_config->{"NLP_tools"}->{"TERM_TAG_FR"} . " " . $h_config->{'TMPFILE'} . ".corpus.tmp " . $h_config->{'NLP_misc'}->{'TERM_LIST_FR'} . " " . $h_config->{'TMPFILE'} . ".result.tmp  2> /dev/null";
-    }else{
-# 	$command_line = $h_config->{"NLP_tools"}->{"TERM_TAG_EN"} . " " . $h_config->{'NLP_misc'}->{'TERM_LIST_EN'} . " " . $h_config->{'TMPFILE'} . ".tempo " . $h_config->{'TMPFILE'} . ".result.tmp < " . $h_config->{'TMPFILE'} . ".corpus.tmp 2> /dev/null";
-	$command_line = $h_config->{"NLP_tools"}->{"TERM_TAG_EN"} . " " . $h_config->{'TMPFILE'} . ".corpus.tmp " . $h_config->{'NLP_misc'}->{'TERM_LIST_EN'} . " " . $h_config->{'TMPFILE'} . ".result.tmp  2> /dev/null";
-    }
-    `$command_line`;
-    close CORPUS;
+#     if($Alvis::NLPPlatform::Annotation::ALVISLANGUAGE eq "FR"){
+# #  	$command_line = $h_config->{"NLP_tools"}->{"TERM_TAG_FR"} . " " . $h_config->{'NLP_misc'}->{'TERM_LIST_FR'} . " " . $h_config->{'TMPFILE'} . ".tempo " . $h_config->{'TMPFILE'} . ".result.tmp < " . $h_config->{'TMPFILE'} . ".corpus.tmp 2> /dev/null";
+# 	$command_line = $h_config->{"NLP_tools"}->{"TERM_TAG_FR"} . " " . $h_config->{'TMPFILE'} . ".corpus.tmp " . $h_config->{'NLP_misc'}->{'TERM_LIST_FR'} . " " . $h_config->{'TMPFILE'} . ".result.tmp  2> /dev/null";
+#     }else{
+# #  	$command_line = $h_config->{"NLP_tools"}->{"TERM_TAG_EN"} . " " . $h_config->{'NLP_misc'}->{'TERM_LIST_EN'} . " " . $h_config->{'TMPFILE'} . ".tempo " . $h_config->{'TMPFILE'} . ".result.tmp < " . $h_config->{'TMPFILE'} . ".corpus.tmp 2> /dev/null";
+# 	$command_line = $h_config->{"NLP_tools"}->{"TERM_TAG_EN"} . " " . $h_config->{'TMPFILE'} . ".corpus.tmp " . $h_config->{'NLP_misc'}->{'TERM_LIST_EN'} . " " . $h_config->{'TMPFILE'} . ".result.tmp  2> /dev/null";
+#     }
+#     `touch $h_config->{'TMPFILE'}.result.tmp`;
+# #    print STDERR "\n\n$command_line\n\n";
+#     `$command_line`;
 
-    open TERMS,"<:utf8", $h_config->{'TMPFILE'} . ".result.tmp" or die "File " . $h_config->{'TMPFILE'} . ".result.tmp not found\n";
+#     open TERMS,"<:utf8", $h_config->{'TMPFILE'} . ".result.tmp" or die "File " . $h_config->{'TMPFILE'} . ".result.tmp not found\n";
 
-    while($line=<TERMS>){
-	chomp $line;
-	my @tab_line = split /\t/, $line;
-	$tabh_sent_terms{$tab_line[0] . "_" . $tab_line[1]} = \@tab_line;
-    }
-    close TERMS;
+#     while($line=<TERMS>){
+# 	chomp $line;
+# 	my @tab_line = split /\t/, $line;
+# 	$tabh_sent_terms{$tab_line[0] . "_" . $tab_line[1]} = \@tab_line;
+#     }
+#     close TERMS;
 
     my $token_start;
     my $token_end;
@@ -1125,7 +1169,7 @@ sub term_tag
 	$token_term = -1;
 	$offset = 0;
 	while (($offset != -1)&&($token_term == -1)) {
-	    if ($Alvis::NLPPlatform::hash_sentences{"sentence$sent"} =~ /$term/igc) {
+	    if ($Alvis::NLPPlatform::hash_sentences{"sentence$sent"} =~ /$term/igc) { # replace regex by index/subtring ?
 		$offset = length($`);
 	    } else {
 		$offset = -1;
@@ -1154,7 +1198,10 @@ sub term_tag
 			$cont.=$Alvis::NLPPlatform::hash_tokens{"token$j"};
 			push @tab_tokens, "token$j";
 		    }
+# 		    print STDERR join ":", @tab_tokens;
+# 		    print STDERR "\n";
 		    if (length($cont) == length($term)) {
+# 			print STDERR "Passe\n"; 
 			$token_term_end=$j-1;
 			$Alvis::NLPPlatform::hash_sentences{"sentence$sent"} =~ /^/g;
 			
@@ -1166,14 +1213,17 @@ sub term_tag
 			$doc_hash->{"semantic_unit$s"}->{"term"}->{"datatype"}="term";
 			$doc_hash->{"semantic_unit$s"}->{"term"}->{"id"}="term" . $i++;
 			$doc_hash->{"semantic_unit$s"}->{"term"}->{"form"}=$term;
+			push @Alvis::NLPPlatform::found_terms,$term;
+			push @Alvis::NLPPlatform::found_terms_smidx,($i-1);
+
 			if (defined($canonical_form)) {
 			    $doc_hash->{"semantic_unit$s"}->{"term"}->{"canonical_form"}=$canonical_form;
 			}
 			# XXX TO BE OPTIMIZED !!!
 
 			my $k=1;
-			my $term_word_start=0;
-			my $term_word_end=0;
+			my $term_word_start=-1;
+			my $term_word_end=-1;
 			my @tab_words;
 			for($k=1;$k<$Alvis::NLPPlatform::number_of_words;$k++){
  			    if($Alvis::NLPPlatform::word_start[$k]==Alvis::NLPPlatform::Annotation::read_key_id($tab_tokens[0])){
@@ -1184,8 +1234,10 @@ sub term_tag
  				last;
  			    }
  			}
-			for($k=$term_word_start;$k<=$term_word_end;$k++){
-			    push @tab_words,"word$k";
+			if (($term_word_start != -1) && ($term_word_end != -1)) {
+			    for($k=$term_word_start;$k<=$term_word_end;$k++){
+				push @tab_words,"word$k";
+			    }
 			}
 			# XXX
                         if (scalar @tab_words == 0) {
@@ -1207,7 +1259,16 @@ sub term_tag
 			    $doc_hash->{"phrase$phrase_idx"}->{'list_refid_components'}->{"refid_word"}=\@tab_words;
 
 			    $doc_hash->{"semantic_unit$s"}->{"term"}->{"refid_phrase"}="phrase$phrase_idx";
+			    # At this point, we have created a term and a phrase. We need to commit this to memory,
+			    # as it will come in handy!
+			    push @Alvis::NLPPlatform::found_terms_phr,$phrase_idx;
+			    push @Alvis::NLPPlatform::found_terms_words,\@tab_words;
+			    
 			    $phrase_idx++;
+			}
+			else{
+			    push @Alvis::NLPPlatform::found_terms_phr,-666; # there is no phrase
+			    push @Alvis::NLPPlatform::found_terms_words,\@tab_words;
 			}
 
 			$Alvis::NLPPlatform::last_semantic_unit++;
@@ -1294,6 +1355,7 @@ sub syntactic_parsing{
     print CORPUS "!graphics\n";
     print CORPUS "!union\n";
     print CORPUS "!walls\n";
+#    print CORPUS "!width=10000\n";
 
     my $word;
     my $word_cont;
@@ -1306,6 +1368,8 @@ sub syntactic_parsing{
     my $idx_tab_word_punct=1;
     my $idx_tab_word=1;
     my @tab_mapping;
+    my $inpostscript_output = 0;
+    my $ingraphics_output = 0;
 
     # print out words+punct and fill in a tab
     push @tab_word_punct," ";
@@ -1383,6 +1447,7 @@ sub syntactic_parsing{
 
     while($line=<SYN_RES>)
     {
+#  	print STDERR $line;
 	if(index($line,"[(")==0){
 	    $insentence=1;
             # XXX
@@ -1394,6 +1459,44 @@ sub syntactic_parsing{
 	}
 	if($insentence==1){
 	    $sentence.=$line;
+# 	    if ($h_config->{NLP_tools}->{'PARSING_IN_P0STSCRIPT'}) {
+# 		if ($inpostscript_output) {
+# 		    if (index($line,"[]")==0){
+# 			$line =~ s/^\[\]/\[0\]/;
+# 		    }
+# 		    print PS_FILE "$line";
+# 		    if (index($line, "%%EndDocument") == 0) {
+# 			$inpostscript_output = 0;
+# 			close PS_FILE;
+# 		    }
+# 		}
+# 	    }
+# 	}   else {
+# 	    if ($h_config->{NLP_tools}->{'PARSING_IN_P0STSCRIPT'}) {
+# 		if (index($line, "%!PS-Adobe") == 0) { 
+# 		    open PS_FILE , ">" . $h_config->{NLP_tools}->{'PARSING_P0STSCRIPT_DIR'} . "/sentence" . ($nsentence+1) . ".eps";
+# 		    $inpostscript_output = 1;
+
+# 		}   
+# 		if ($inpostscript_output) {
+# 		    print PS_FILE "$line";
+# 		}
+# 	    }
+# 	    if ($h_config->{NLP_tools}->{'PARSING_GRAPHICS'}) {
+# 		if (index($line, "  Linkage") == 0) {
+# 		    $ingraphics_output = 1;
+# 		    open GRAPH_FILE, ">" . $h_config->{NLP_tools}->{'PARSING_P0STSCRIPT_DIR'} . "/sentence" . ($nsentence+1) . ".txt";
+# 		} else {
+# 		    if ($ingraphics_output) {
+# 			print GRAPH_FILE "$line";
+# 			if (index($line,"LEFT-WALL") == 0) {
+# 			    close GRAPH_FILE;
+# 			    $ingraphics_output = 0;
+# 			}
+# 		    }
+# 		}
+
+# 	    }
 	}
 	if(index($line,"[]")==0){
 	    # process the line
@@ -1401,55 +1504,56 @@ sub syntactic_parsing{
 	    $sentence=~s/\[Linkage\s+[0-9]+\]//sgo;
 	    $sentence=~s/\[\]//sgo;
 	    $sentence=~s/\n//sgo;
-	    $sentence=~m/^(.+)\[\[/;
-	    $tokens=$1;
-	    $analyses = $';
-	    # output
-	    
-	    # search left-wall to shift identifiers
-	    if($tokens=~/LEFT\-WALL/so){
-		$left_wall=1;
-	    }else{
-		$left_wall=0;
-	    }
-	    
-	    # search right-wall, simply to ignore it
-	    if($tokens=~/RIGHT\-WALL/so){
-		$right_wall=1;
-	    }else{
-		$right_wall=0;
-	    }
+# 	    $sentence=~s/\[[0-9\s]*\]diagram$//g;
+	    if ($sentence=~m/^(.+)\[\[/) {
+		$tokens=$1;
+		$analyses = $';
+	    # output'
+		
+		# search left-wall to shift identifiers
+		if($tokens=~/LEFT\-WALL/so){
+		    $left_wall=1;
+		}else{
+		    $left_wall=0;
+		}
+		
+		# search right-wall, simply to ignore it
+		if($tokens=~/RIGHT\-WALL/so){
+		    $right_wall=1;
+		}else{
+		    $right_wall=0;
+		}
 
-	    # parse tokens
-	    @arr_tokens=split /\)\(/,$tokens;
-	    $last_token=(scalar @arr_tokens)-1;
-	    $arr_tokens[0]=~s/^\[\(//sgo;
-	    $arr_tokens[$last_token]=~s/\)\]$//sgo;
+		# parse tokens
+		@arr_tokens=split /\)\(/,$tokens;
+		$last_token=(scalar @arr_tokens)-1;
+		$arr_tokens[0]=~s/^\[\(//sgo;
+		$arr_tokens[$last_token]=~s/\)\]$//sgo;
 
 # 	    my $tmpfdsf;
 # 	    for($tmpfdsf=0;$tmpfdsf<=$last_token;$tmpfdsf++){
 # 		#print STDERR "******\$\$\$\$\$\$****** ($tmpfdsf) $arr_tokens[$tmpfdsf]\n";
 # 	    }
 
-	    # Parsing
-	    while($analyses=~/(\[[0-9]+\s[0-9]+\s[0-9]+\s[^\]]+\])/sgoc){
-		$analysis=$1;
-		$analysis=~m/\[([0-9]+)\s([0-9]+)\s([0-9]+)\s\(([^\]]+)\)\]/sgo;
-		$token_start=$1;
-		$token_end=$2;
-		$relation=$4;
-		if(
-		   (($left_wall==1)&&(($token_start==0) || ($token_end==0)))
-		   ||(($right_wall==1)&&(($token_start==$last_token) || ($token_end==$last_token)))
-		   ){
-		    # ignore any relation with the left or right wall
-		}else{
-		    if($left_wall==0){
-			$token_start++;
-			$token_end++;
-		    }
-		    # make sure we're not dealing with punctuation, otherwise just ignore'
- 	            if((defined($tab_mapping[$token_start+$wordidshift])) && (defined($tab_mapping[$token_end+$wordidshift]) ne "")){
+		# Parsing
+		while($analyses=~/(\[[0-9]+\s[0-9]+\s[0-9]+\s[^\]]+\])/sgoc){
+		    $analysis=$1;
+		    $analysis=~m/\[([0-9]+)\s([0-9]+)\s([0-9]+)\s\(([^\]]+)\)\]/sgo;
+		    $token_start=$1;
+		    $token_end=$2;
+		    $relation=$4;
+		    if(
+		       (($left_wall==1)&&(($token_start==0) || ($token_end==0)))
+		       ||(($right_wall==1)&&(($token_start==$last_token) || ($token_end==$last_token)))
+		       ){
+			# ignore any relation with the left or right wall
+		    }else{
+			if($left_wall==0){
+			    $token_start++;
+			    $token_end++;
+			}
+			# make sure we're not dealing with punctuation, otherwise just ignore'
+			if((defined($tab_mapping[$token_start+$wordidshift])) && (defined($tab_mapping[$token_end+$wordidshift]) ne "")){
 #                        if($tab_mapping[($token_start+$wordidshift)]==14){
 #                            if($tab_mapping[($token_end+$wordidshift)]==15){
 #                                 print STDERR "\n";
@@ -1459,24 +1563,24 @@ sub syntactic_parsing{
 #                            }
 #                        }
 #                        print STDERR "$relation (".$tab_mapping[($token_start+$wordidshift)]." ; ".$tab_mapping[($token_end+$wordidshift)].")\n";
-			$doc_hash->{"syntactic_relation$relation_id"}={};
-			$doc_hash->{"syntactic_relation$relation_id"}->{'id'}="syntactic_relation$relation_id";
-			$doc_hash->{"syntactic_relation$relation_id"}->{'datatype'}="syntactic_relation";
-			$doc_hash->{"syntactic_relation$relation_id"}->{'syntactic_relation_type'}="$relation";
-			$doc_hash->{"syntactic_relation$relation_id"}->{'refid_head'} = {};
-			$doc_hash->{"syntactic_relation$relation_id"}->{'refid_head'}->{'datatype'}="refid_head";
-			$doc_hash->{"syntactic_relation$relation_id"}->{'refid_head'}->{"refid_word"}="word".$tab_mapping[($token_start+$wordidshift)];
+			    $doc_hash->{"syntactic_relation$relation_id"}={};
+			    $doc_hash->{"syntactic_relation$relation_id"}->{'id'}="syntactic_relation$relation_id";
+			    $doc_hash->{"syntactic_relation$relation_id"}->{'datatype'}="syntactic_relation";
+			    $doc_hash->{"syntactic_relation$relation_id"}->{'syntactic_relation_type'}="$relation";
+			    $doc_hash->{"syntactic_relation$relation_id"}->{'refid_head'} = {};
+			    $doc_hash->{"syntactic_relation$relation_id"}->{'refid_head'}->{'datatype'}="refid_head";
+			    $doc_hash->{"syntactic_relation$relation_id"}->{'refid_head'}->{"refid_word"}="word".$tab_mapping[($token_start+$wordidshift)];
 # 			$doc_hash->{"syntactic_relation$relation_id"}->{'refid_head'}="word".$tab_mapping[($token_start+$wordidshift)];
-			$doc_hash->{"syntactic_relation$relation_id"}->{'refid_modifier'} = {};
-			$doc_hash->{"syntactic_relation$relation_id"}->{'refid_modifier'}->{'datatype'}="refid_modifier";
-			$doc_hash->{"syntactic_relation$relation_id"}->{'refid_modifier'}->{"refid_word"}="word".$tab_mapping[($token_end+$wordidshift)];
+			    $doc_hash->{"syntactic_relation$relation_id"}->{'refid_modifier'} = {};
+			    $doc_hash->{"syntactic_relation$relation_id"}->{'refid_modifier'}->{'datatype'}="refid_modifier";
+			    $doc_hash->{"syntactic_relation$relation_id"}->{'refid_modifier'}->{"refid_word"}="word".$tab_mapping[($token_end+$wordidshift)];
 # 			$doc_hash->{"syntactic_relation$relation_id"}->{'refid_modifier'}="word".$tab_mapping[($token_end+$wordidshift)];
-			
-			$relation_id++;
+			    
+			    $relation_id++;
+			}
 		    }
 		}
-	    }
-	    
+            }
 	    # trash everything and continue the loop
 
 	    $insentence=0;

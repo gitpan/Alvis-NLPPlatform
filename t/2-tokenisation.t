@@ -35,4 +35,4 @@ eval {
      print STDERR "\n";
 };
 
-ok(Alvis::NLPPlatform::standalone_main(\%config, $doc_xml, \*STDOUT) == 0);
+ok(Alvis::NLPPlatform::standalone_main(\%config, $doc_xml, \*STDOUT) != 0);

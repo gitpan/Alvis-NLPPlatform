@@ -469,6 +469,7 @@ sub render_xml{
     my $descriptor = $_[1];
     my $printCollectionHeaderFooter = $_[2];
 
+
     my  $indent="    "; # for indent
     $end_layer="";
 
@@ -519,6 +520,7 @@ The method return 0 in case of success.
 sub load_xml
 {
     my $doc_xml_in = $_[0];
+    my $h_config = $_[1];
     my @doc_xml;
     @doc_xml = split /\n/, $doc_xml_in;
     my $i;
@@ -607,9 +609,21 @@ sub load_xml
     $acquisitionData=~/<url>([^<]+)<\/url>/g;
     $documenturl=$1;
 
-    $parser->parse(Source=>{String=>$enter});
-    my $string_parse =  $myreceiver->{"tab_object"};
+    my $string_parse;
+    if ((!exists $h_config->{"XML_INPUT"}->{"LINGUISTIC_ANNOTATION_LOADING"}) || ($h_config->{"XML_INPUT"}->{"LINGUISTIC_ANNOTATION_LOADING"} != 0)) {
+	warn "  Loading existing linguistic annotations if necessary\n";
+	$parser->parse(Source=>{String=>$enter});
+	
+	
+	# Caveat !!! we assume that there is only named entities in the loaded documents
+	$Alvis::NLPPlatform::last_semantic_unit = $myreceiver->{"counter_id"};
+	
+    
+	
+    }
+    $string_parse =  $myreceiver->{"tab_object"};
     return($string_parse);
+
 }
 
 # =head1 ENVIRONMENT
