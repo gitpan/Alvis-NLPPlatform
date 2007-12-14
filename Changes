@@ -1,5 +1,58 @@
 Revision history for Perl extension Alvis::NLPPlatform.
 
+0.4    - Correction in the function sigint handler : nlp_host and
+         nlp_port are now declared as global.
+       - Correction in the TermTagging : language switch was well
+         taken into account
+       - Correction in the management of the ".proc_id" file
+       - correction in the computing of the xml rendering time
+         (the variable is set to zero ;-)
+       - stderr when NLP tools are called, is redirected in a log file
+       - addition of a variable DEBUG defining a debug mode (temporary
+         files are not removed)
+       - alvis-nlp-standalone can read a file given in argument or on
+         the STDIN stream
+       - Documentation of the modules and scripts are gathered at the
+         end of each file
+       - Addition of DTD and XSD files in the documentation (etc
+         directory)
+       - Additional functionality: Loading files in various formats
+         (PDF, LaTeX, Word, etc.) before carrying out linguistic
+         annotations.
+       - Addition of the modules Alvis::NLPPlatform::Convert and
+         Alvis::NLPPlatform::Document for converting files in various
+         formats in ALVIS XML.
+       - Definition of the ogmios-standalone, ogmios-nlp-server,
+         ogmios-nlp-client: annotation scripts from various formats
+       - Improvement in the sentence segmentation: taking into account
+         sectioning (!)
+       - Addition of a Build.PL file        
+       - Enable to load empty markups
+       - best management of UTF8 (use of  Encode module)
+       - various fixes and optimization
+
+       - Yatea wrapper: new variable to get an yatea XML output or not
+       - Yatea warpper: addition of the output of yatea in the XML
+         output for the platform.
+       - bug fixes
+       - Rewrite of the TreeTagger wraper always by using
+       - hash_words_punct but less complexe
+
+       - Modification in the Wrapper of bioLG : options are set in the
+         XML form
+       - integration of the cleanning of the output of bioLg in the code.
+       - Corrections in the LGbio wrapper
+       - Output Data can be stored in a descriptor or a scalar.
+       - Addition of the constituents in the BioLG wrapper (UserNLPWrapper.pm)
+       - Addition of examples
+       - Best management of the options (if they are not set)
+
+#       - Bad hack for the quick integration of the semantic tagging
+#         (tool SemanticTypeTagger) ** COMMENTED CODE **
+
+
+
+
 0.3    - additional options for the link parser wrapper, to write link
          parser postscritp output (PARSING_IN_P0STSCRIPT)
          and/or link parser graphics output (PARSING_GRAPHICS) in file 

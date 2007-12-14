@@ -21,13 +21,16 @@ WriteMakefile(
                            Pod::Usage => 0,
                            Config::General => 2.30,
                            Sys::Hostname => 0,
+                           Encode => 2.23,
                            Fcntl => 0,
-                           utf8 => 0,
+                           File::MMagic => 1.27,
                          }, # e.g., Module::Name => 1.1
+    LICENSE           => "gpl",
+    INSTALLDIRS     => 'perl',
     ($] >= 5.005 ?     ## Add these new keywords supported since 5.005
       (ABSTRACT_FROM  => 'lib/Alvis/NLPPlatform.pm', # retrieve abstract from module
        AUTHOR         => 'Thierry Hamon <thierry.hamon@lipn.univ-paris13.fr> and Julien Deriviere <julien.deriviere@lipn.univ-paris13.fr>') : ()),
-    EXE_FILES    => [ 'bin/alvis-nlp-client', 'bin/alvis-nlp-server', 'bin/alvis-nlp-standalone' ],
+    EXE_FILES    => [ 'bin/alvis-nlp-client', 'bin/alvis-nlp-server', 'bin/alvis-nlp-standalone', 'bin/ogmios-nlp-client', 'bin/ogmios-nlp-server', 'bin/ogmios-nlp-standalone' ],
 #     UNINSTALL => '$(PERLRUN) -MExtUtils::Install -e \'uninstall({@ARGV});\'',
     
 );

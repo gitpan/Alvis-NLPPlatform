@@ -61,60 +61,46 @@ use Sys::Hostname;
 
 # Process Option
 
-my $man = 0;
-my $help = 0;
-my $rcfile = "";
+# my $man = 0;
+# my $help = 0;
+my $rcfile = "./nlpplatform-test.rc";
 
 
 
-GetOptions('help|?' => \$help, man => \$man, "rcfile=s" => \$rcfile) or pod2usage(2);
-pod2usage(1) if $help;
-pod2usage(-exitstatus => 0, -verbose => 2) if $man;
+# GetOptions('help|?' => \$help, man => \$man, "rcfile=s" => \$rcfile) or pod2usage(2);
+# pod2usage(1) if $help;
+# pod2usage(-exitstatus => 0, -verbose => 2) if $man;
 
-if (($rcfile eq "") || (!(-f $rcfile))) {
-    pod2usage(1);
-    warn "No such config file or config file is not set\n";
-} 
+# if (($rcfile eq "") || (!(-f $rcfile))) {
+#     pod2usage(1);
+#     warn "No such config file or config file is not set\n";
+# } 
 
 
 my %config = Alvis::NLPPlatform::load_config($rcfile);
 
 
 
-# print STDERR Dumper(%config);
-
-# document loading
-
 my $line;
 my $doc_xml = "";
 
 
-if ($#ARGV == -1) {
-    while($line=<STDIN>) {
+open FILEIN, "./InputDocument.xml" or die "./InputDocument.xml: No such file (maybe you are not in the example directory\n";
+    while($line=<FILEIN>) {
 	$doc_xml .= $line;
     }
-} else {
-    warn $ARGV[$#ARGV] . "\n";
-
-    if ( -f $ARGV[$#ARGV] ) {
-	open INPUTFILE, $ARGV[$#ARGV] or die "No such file or directory\n";
-	while($line=<INPUTFILE>) {
-	    $doc_xml .= $line;
-	}
-	close INPUTFILE;
-    } else {
-	die "No such file or dorectory\n";
-    }
-}
+close FILEIN;
 
 # my @tab_docs_xml = Alvis::NLPPlatform::split_to_docRecs($doc_xml);
 
-# Alvis::NLPPlatform::Annotation::print_documentCollectionHeader(\*STDOUT);
+print STDERR "The annotated document is stored in the file ./OutputDocument.xml\n";
+
+open FILEOUT, "> ./OutputDocument.xml";
+
+# Alvis::NLPPlatform::Annotation::print_documentCollectionHeader(\*FILEOUT);
 
 my $i;
 my $render_time;
-# my $stdout_cur_pos;
-# my $stdout_start_pos;
 my @cur_doc;
 my $j;
 my $tmpfile;
@@ -122,23 +108,9 @@ my $HOSTNAME=hostname;
        
 
 # for($i = 0; $i<scalar(@tab_docs_xml); $i++) {
-#     $tmpfile = $config{'ALVISTMP'} . "/$HOSTNAME.$$.outfile";
-#     open FILETMP_OUT, ">$tmpfile";
-#     $render_time = Alvis::NLPPlatform::standalone_main(\%config, ${$tab_docs_xml[$i]}[1], \*FILETMP_OUT, 0);
-#     close(FILETMP_OUT);
-
-#     open FILETMP_OUT, "$tmpfile" or die "No such file or directory\n";
-#     @cur_doc = <FILETMP_OUT>;
-#     $j = 0;
-#     while(($j< scalar @cur_doc) && ($cur_doc[$j] !~ s/\@RENDER_TIME_NOT_SET\@/$render_time/)) {
-# 	$j++;
-#     }
-#     close(FILETMP_OUT);
-#     unlink $tmpfile;
-#     print @cur_doc;
-    print Alvis::NLPPlatform::standalone(\%config, $HOSTNAME, $doc_xml);
+    print FILEOUT Alvis::NLPPlatform::standalone(\%config, $HOSTNAME, $doc_xml);
 # }
 
-# Alvis::NLPPlatform::Annotation::print_documentCollectionFooter(\*STDOUT);
+# Alvis::NLPPlatform::Annotation::print_documentCollectionFooter(\*FILEOUT);
 
-
+close FILEOUT;

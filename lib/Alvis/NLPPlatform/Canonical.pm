@@ -1,8 +1,69 @@
-#!/usr/bin/perl
-
 package Alvis::NLPPlatform::Canonical;
 use strict;
+use warnings;
 
+
+
+sub CleanUp
+{
+    
+    my ($canonical, $preserveWhiteSpace) = @_;
+
+#     my $tmp_str;
+
+    if (!$preserveWhiteSpace) {
+	warn "\nRemoving White Spaces\n";
+	
+	$canonical =~ s/^[\s\t]*(<[^>]+>)[\s\t\n]*(\n)/$1$2/go;
+	$canonical =~ s/(\n)[\s\t\n]*(<[^>]+>)[\s\t]*(\n)/$1$2$3/go;
+	$canonical =~ s/(\n)[\s\t\n]*(<[^>]+>)[\s\t]*/$1$2/go;
+    }
+    $canonical =~ s/<section[^>]*>//go;
+    
+
+
+    $canonical =~ s/<\/?list>/\n/go;
+    $canonical =~ s/<\/?item>/\n/go;
+    $canonical =~ s/<\/?canonicalDocument>/\n/go;
+    $canonical =~ s/<\/?ulink[^>]*>//go;
+    if (!$preserveWhiteSpace) {
+	$canonical =~ s/\n+/\n/go;
+	$canonical =~ s/^\n//go;
+	$canonical =~ s/^\n$//go;
+    }
+    
+    my $pos = 0;
+    my $str = $canonical;
+    my $pos_section = -1;
+    my $pos_prec_section = 0;
+
+    Alvis::NLPPlatform::XMLEntities::decode($str);
+    $canonical = "";
+
+    while(($pos_section = index($str, "</section>", $pos_prec_section)) > -1) {
+	$canonical .= substr($str, $pos_prec_section, $pos_section - $pos_prec_section);
+ 	chomp $canonical;
+ 	if ($pos_section != $pos_prec_section) {
+ 	    $canonical .= "\n";
+ 	}
+	if (!$preserveWhiteSpace) {
+	    $canonical =~ s/\n+/\n/go;
+	    $canonical =~ s/^\n//go;
+	    $canonical =~ s/^\n$//go;
+	}
+
+	push @Alvis::NLPPlatform::tab_end_sections_byaddr, (length($canonical) - 1);
+	$pos_prec_section = $pos_section + 10;
+    }
+
+
+    return($canonical);
+}
+
+1;
+
+
+__END__
 
 =head1 NAME
 
@@ -33,32 +94,6 @@ space at the beginning and the end of any line.
 
 =cut
 
-sub CleanUp
-{
-    
-    my ($canonical, $preserveWhiteSpace) = @_;
-
-    if (!$preserveWhiteSpace) {
-	warn "\nRemoving White Spaces\n";
-	
-	$_[0] =~ s/^[\s\t]*(<[^>]+>)[\s\t\n]*(\n)/$1$2/go;
-	$_[0] =~ s/(\n)[\s\t\n]*(<[^>]+>)[\s\t]*(\n)/$1$2$3/go;
-	$_[0] =~ s/(\n)[\s\t\n]*(<[^>]+>)[\s\t]*/$1$2/go;
-    }
-    $_[0] =~ s/<section[^>]*>//go;
-    $_[0] =~ s/<\/section[^>]*>/\n/go;
-    $_[0] =~ s/<\/?list>/\n/go;
-    $_[0] =~ s/<\/?item>/\n/go;
-    $_[0] =~ s/<\/?canonicalDocument>/\n/go;
-    $_[0] =~ s/<\/?ulink[^>]*>//go;
-    if (!$preserveWhiteSpace) {
-	$_[0] =~ s/\n+/\n/go;
-	$_[0] =~ s/^\n//go;
-	$_[0] =~ s/^\n$//go;
-    }
-}
-
-
 =head1 SEE ALSO
 
 C<Alvis::NLPPlatform>
@@ -79,4 +114,3 @@ at your option, any later version of Perl 5 you may have available.
 
 =cut 
 
-1;

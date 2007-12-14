@@ -1,10 +1,10 @@
-#!/usr/bin/perl -w
-
 package Alvis::NLPPlatform::MyReceiver;
 #use Data::Dumper;
 
 
 use strict;
+use warnings;
+
 use XML::Parser::PerlSAX;
 # use utf8;
 
@@ -12,46 +12,6 @@ use Alvis::NLPPlatform::XMLEntities;
 
 use Data::Dumper;
 
-=head1 NAME
-
-Alvis::NLPPlatform::MyReceiver - Internal Perl extension for analysing XML
-documents in the Alvis format
-
-=head1 SYNOPSIS
-
-use Alvis::NLPPlatform::MyReceiver;
-
-my $myreceiver = Alvis::NLPPlatform::MyReceiver->new();
-
-my $parser = XML::Parser::PerlSAX->new(Handler => $myreceiver);
-
-=head1 DESCRIPTION
-
-This module is the handler needed to parse a XML document, when using
-the parser C<Parser::PerlSAX>. The associated methods are the standard
-ones. See C<Parser::PerlSAX> for futher information.
-
-=head1 SEE ALSO
-
-C<Alvis::NLPPlatform>
-
-Alvis web site: http://www.alvis.info
-
-=head1 AUTHORS
-
-Guillaume Vauvert <guillaume.vauvert@lipn.univ-paris13.fr>
-
-Currently maintained by Julien Deriviere <julien.deriviere@lipn.univ-paris13.fr> and Thierry Hamon <thierry.hamon@lipn.univ-paris13.fr>
-
-=head1 LICENSE
-
-Copyright (C) 2004 by Guillaume Vauvert, Thierry Hamon and Julien Deriviere
-
-This program is free software; you can redistribute it and/or modify
-it under the same terms as Perl itself, either Perl version 5.8.6 or,
-at your option, any later version of Perl 5 you may have available.
-
-=cut
 
 ###
 ### Package
@@ -233,3 +193,46 @@ sub is_empty {
 
 
 1;
+
+__END__
+
+=head1 NAME
+
+Alvis::NLPPlatform::MyReceiver - Internal Perl extension for analysing XML
+documents in the Alvis format
+
+=head1 SYNOPSIS
+
+use Alvis::NLPPlatform::MyReceiver;
+
+my $myreceiver = Alvis::NLPPlatform::MyReceiver->new();
+
+my $parser = XML::Parser::PerlSAX->new(Handler => $myreceiver);
+
+=head1 DESCRIPTION
+
+This module is the handler needed to parse a XML document, when using
+the parser C<Parser::PerlSAX>. The associated methods are the standard
+ones. See C<Parser::PerlSAX> for futher information.
+
+=head1 SEE ALSO
+
+C<Alvis::NLPPlatform>
+
+Alvis web site: http://www.alvis.info
+
+=head1 AUTHORS
+
+Guillaume Vauvert <guillaume.vauvert@lipn.univ-paris13.fr>
+
+Currently maintained by Julien Deriviere <julien.deriviere@lipn.univ-paris13.fr> and Thierry Hamon <thierry.hamon@lipn.univ-paris13.fr>
+
+=head1 LICENSE
+
+Copyright (C) 2004 by Guillaume Vauvert, Thierry Hamon and Julien Deriviere
+
+This program is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself, either Perl version 5.8.6 or,
+at your option, any later version of Perl 5 you may have available.
+
+=cut

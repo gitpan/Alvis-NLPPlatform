@@ -1,7 +1,36 @@
-#!/usr/bin/perl
-
 package Alvis::NLPPlatform::XMLEntities;
 use strict;
+
+use warnings;
+
+sub encode
+{
+    $_[0]=~s/&/&amp;/g;
+    $_[0]=~s/\"/&quot;/g;
+    $_[0]=~s/\'/&apos;/g;
+    $_[0]=~s/</&lt;/g;
+    $_[0]=~s/>/&gt;/g;
+}
+
+
+
+
+sub decode
+{
+    my $shift_offset = 0;
+
+    $shift_offset += ($_[0]=~s/&quot;/\"/g) * 5;
+    $shift_offset += ($_[0]=~s/&apos;/\'/g) * 5;
+    $shift_offset += ($_[0]=~s/&amp;/&/g) * 4;
+    $shift_offset += ($_[0]=~s/&lt;/</g) * 3;
+    $shift_offset += ($_[0]=~s/&gt;/>/g) * 3;
+    return($shift_offset);
+}
+
+
+1;
+
+__END__
 
 =head1 NAME
 
@@ -31,33 +60,11 @@ This method encodes special XML characters as XML entities in the line C<$line>.
 
 
 =cut
-
-sub encode
-{
-    $_[0]=~s/&/&amp;/g;
-    $_[0]=~s/\"/&quot;/g;
-    $_[0]=~s/\'/&apos;/g;
-    $_[0]=~s/</&lt;/g;
-    $_[0]=~s/>/&gt;/g;
-}
-
-
 =head2 decode($line)
 
-This method decodes XML entities corresponding to special XML characters in the line C<$line> .
+This method decodes XML entities corresponding to special XML characters in the line C<$line> . It returns the shift in the offset after substitution;
 
 =cut
-
-
-sub decode
-{
-    $_[0]=~s/&quot;/\"/g;
-    $_[0]=~s/&apos;/\'/g;
-    $_[0]=~s/&amp;/&/g;
-    $_[0]=~s/&lt;/</g;
-    $_[0]=~s/&gt;/>/g;
-}
-
 
 =head1 SEE ALSO
 
@@ -80,5 +87,3 @@ it under the same terms as Perl itself, either Perl version 5.8.6 or,
 at your option, any later version of Perl 5 you may have available.
 
 =cut
-
-1;

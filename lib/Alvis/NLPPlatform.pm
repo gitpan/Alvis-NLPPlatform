@@ -4,115 +4,13 @@
 
 package Alvis::NLPPlatform;
 
-=head1 NAME
 
-Alvis::NLPPlatform - Perl extension for linguistically annotating XML documents in Alvis
-
-=head1 SYNOPSIS
-
-=over 
-
-=item * Standalone mode:
-
-    use Alvis::NLPPlatform;
-
-    Alvis::NLPPlatform::standalone_main(\%config, $doc_xml, \*STDOUT);
-
-=item * Distributed mode:
-
-    # Server process
-
-    use Alvis::NLPPlatform;
-
-    Alvis::NLPPlatform::server($rcfile);
-
-    # Client process
-
-    use Alvis::NLPPlatform;
-
-    Alvis::NLPPlatform::client($rcfile);
-
-=back
-
-=head1 DESCRIPTION
-
-This module is the main part of the Alvis NLP platform. It provides
-overall methods for the linguistic annotation of web documents.
-Linguistic annotations depend on the configuration variables and
-dependencies between linguistic steps.
-
-Input documents are assumed to be in the ALVIS XML format
-(C<standalone_main>) or to be loaded in a hashtable
-(C<client_main>). The annotated document is recorded in the given
-descriptor (C<standalone_main>) or returned as a hashtable
-(C<client_main>).
-
-=head1 Linguistic annotation: requirements
-
-=over 4
-
-=item 1
-
- Tokenized: this step has no dependency. It is required for
-         any following annotation level.
-
-=item 2
-
- Named Entity Tagging: this step requires tokenization. 
-
-=item 3
-
- Word segmentation: this step requires tokenization.
-         The  Named Entity Tagging step is recommended to improve the segmentation.
-
-=item 4
-
- Sentence segmentation: this step requires tokenization.
-         The  Named Entity Tagging step is recommended to improve the segmentation. 
-
-=item 5
-
- Part-Of-Speech Tagging: this step requires tokenization, and word and
- sentence segmentation.
-
-=item 6
-
- Lemmatization: this step requires tokenization, 
-word and sentence segmentation, and Part-of-Speech tagging.
-
-=item 7
-
- Term Tagging: this step requires tokenization, 
-word and sentence segmentation, and Part-of-Speech tagging. Lemmatization is recommended to improve the term recognition.
-
-
-=item 8
-
- Parsing: this step requires tokenization, word and sentence
-segmentation.  Term tagging is recommended to improve the parsing of noun phrases.
-
-=item 9
-
- Semantic feature tagging: To be determined
-
-=item 10
-
- Semantic relation tagging: To be determined
-
-=item 11
-
- Anaphora resolution: To be determined
-
-=back
-
-=head1 METHODS
-
-=cut
-
-our $VERSION='0.3';
+our $VERSION='0.4';
 
 
 use strict;
+use warnings;
+
 use Alvis::NLPPlatform::XMLEntities;
 use Alvis::NLPPlatform::Canonical;
 use Alvis::NLPPlatform::Annotation;
@@ -125,19 +23,26 @@ use IO::Socket;
 use IO::Socket::INET;
 use Fcntl qw(:DEFAULT :flock :seek);
 use Alvis::Pipeline;
+use File::Path qw(mkpath);
+use File::Touch;
 
 use Data::Dumper;
 
 my $cur_doc_nb;
 my $done_parsing;
 
+our $last_doc;
+
+our @tab_end_sections_byaddr;
+our @tab_end_sections_bytoken;
 our %hash_tokens;
 our %hash_words;
 our %hash_words_punct;
+#our %hash_words_punct2words;
 our %hash_sentences;
 our %hash_postags;
 our %hash_named_entities;
-
+our %hash_lemmas;
 
 our $number_of_words;
 our $number_of_sentences;
@@ -164,19 +69,28 @@ our @found_terms_smidx;
 our @found_terms_phr;
 our @found_terms_words;
 
+my $phrase_idx;
+
 my $id;
 
 # Timer 
 
 my $timer_mem;
 
+# because those variables have to be viewed in the sigint handler !!!
+my $nlp_host;
+my $nlp_port;
+my $connection_retry;
 
 # ENVIRONMENT VARIABLES
 my $NLPTOOLS;
 my $ALVISTMP;
+our $ALVISLOGFILE;
 my $HOSTNAME;
 my $TMPFILE;
 my $ALVISRSC;
+
+our $ALVISDEBUG = 0;
 
 my $ENABLE_TOKEN;
 my $ENABLE_NER;
@@ -186,6 +100,7 @@ my $ENABLE_POS;
 my $ENABLE_LEMMA;
 my $ENABLE_TERM_TAG;
 my $ENABLE_SYNTAX;
+my $ENABLE_SEMANTIC_TAG;
 
 # Dependencies mask
 my $MASK_TOKEN=1;
@@ -196,6 +111,7 @@ my $MASK_POS=16;
 my $MASK_LEMMA=32;
 my $MASK_TERM_TAG=64;
 my $MASK_SYNTAX=128;
+my $MASK_SEMANTIC_TAG=256;
 
 # LOG MANAGEMENT
 our @tab_errors;
@@ -211,23 +127,12 @@ my $time_pos;
 my $time_lemm;
 my $time_term;
 my $time_synt;
+my $time_semtag;
 my $time_render;
 my $time_total;
 
 
 
-=head2 compute_dependencies()
-
-    compute_dependencies($hashtable_config);
-
-This method processes the configuration variables defining the
-linguistic annotation steps. C<$hash_config> is the
-reference to the hashtable containing the variables defined in the
-configuration file.  The dependencies of the linguistic
-annotations are then coded. For instance, asking for POS annotation will
-imply tokenization, word and sentence segmentations.
-
-=cut 
 
 sub compute_dependencies{
     my $h_config = $_[0];
@@ -257,6 +162,10 @@ sub compute_dependencies{
 	$val|=157;
     }
 
+    if($h_config->{'linguistic_annotation'}->{'ENABLE_SEMANTIC_TAG'}){
+	$val|=511;
+    }
+
     print STDERR "Dependency mask: $val\n";
 
     if($val&$MASK_TOKEN){$ENABLE_TOKEN=1;}else{$ENABLE_TOKEN=0;}
@@ -267,6 +176,7 @@ sub compute_dependencies{
     if($val&$MASK_LEMMA){$ENABLE_LEMMA=1;}else{$ENABLE_LEMMA=0;}
     if($val&$MASK_TERM_TAG){$ENABLE_TERM_TAG=1;}else{$ENABLE_TERM_TAG=0;}
     if($val&$MASK_SYNTAX){$ENABLE_SYNTAX=1;}else{$ENABLE_SYNTAX=0;}
+    if($val&$MASK_SEMANTIC_TAG){$ENABLE_SEMANTIC_TAG=1;}else{$ENABLE_SEMANTIC_TAG=0;}
 
     print STDERR "TOKENS: "; if($ENABLE_TOKEN){print STDERR "Enabled\n";}else{print STDERR "Disabled\n";}
     print STDERR "NER: "; if($ENABLE_NER){print STDERR "Enabled\n";}else{print STDERR "Disabled\n";}
@@ -274,22 +184,14 @@ sub compute_dependencies{
     print STDERR "SENTENCES: "; if($ENABLE_SENTENCE){print STDERR "Enabled\n";}else{print STDERR "Disabled\n";}
     print STDERR "POS: "; if($ENABLE_POS){print STDERR "Enabled\n";}else{print STDERR "Disabled\n";}
     print STDERR "LEMMA: "; if($ENABLE_LEMMA){print STDERR "Enabled\n";}else{print STDERR "Disabled\n";}
-    print STDERR "TERM_TAG: "; if($ENABLE_TERM_TAG){print STDERR "Enabled\n";}else{print STDERR "Disabled\n";}
+    print STDERR "TERM_TAGGING: "; if($ENABLE_TERM_TAG){print STDERR "Enabled\n";}else{print STDERR "Disabled\n";}
     print STDERR "SYNTAX: "; if($ENABLE_SYNTAX){print STDERR "Enabled\n";}else{print STDERR "Disabled\n";}
+    print STDERR "SEMANTIC TAGGING: "; if($ENABLE_SEMANTIC_TAG){print STDERR "Enabled\n";}else{print STDERR "Disabled\n";}
     return;
 }
 
 
 ###########################################################################
-
-=head2 starttimer()
-
-    starttimer()
-
-This method records the current date and time. It is used to compute
-the time of a processing step.
-
-=cut
 
 sub starttimer(){
     my $sec;
@@ -299,14 +201,7 @@ sub starttimer(){
     $timer_mem=($sec+$usec);
 }
 
-=head2 endtimer()
 
-    endtimer();
-
-This method ends the timer and returns the time of a processing step, according to the time recorded by C<starttimer()>.
-
-
-=cut
 
 sub endtimer(){
     my $sec;
@@ -316,20 +211,6 @@ sub endtimer(){
     return (($sec+$usec)-$timer_mem);
 }
 
-=head2 linguistic_annotation()
-    
-    linguistic_annotation($h_config,$doc_hash);
-
-This methods carries out the lingsuitic annotation according to the list
-of required annotations. Required annotations are defined by the
-configuration variables (C<$hash_config> is the
-reference to the hashtable containing the variables defined in the
-configuration file).
-
-The document to annotate is passed as a hash table (C<$doc_hash>). The
-method adds annotation to this hash table.
-
-=cut
 
 
 sub linguistic_annotation {
@@ -337,6 +218,11 @@ sub linguistic_annotation {
     my $doc_hash = $_[1];
 
     my $nb_max_tokens = 0;
+
+    $Alvis::NLPPlatform::Annotation::phrase_idx = 1;
+    $Alvis::NLPPlatform::Annotation::syntactic_relation_idx = 1;
+
+    print STDERR "Working Language: " . $Alvis::NLPPlatform::Annotation::ALVISLANGUAGE . "\n";
 
     starttimer();
     if ($ENABLE_TOKEN) {
@@ -414,6 +300,15 @@ sub linguistic_annotation {
 		push @{$doc_hash->{"log_processing0"}->{"comments"}},  "Syntactic Parsing Time : $time_synt";
 	    }
 
+	    # Semantic tagging
+	    if($ENABLE_SEMANTIC_TAG==1){
+		starttimer();
+		if(!$dont_annotate){Alvis::NLPPlatform::UserNLPWrappers->semantic_feature_tagging($h_config, $doc_hash)};
+		$time_semtag+=endtimer();
+		print STDERR "\tSemantic Feature Tagging Time : $time_semtag\n";
+		push @{$doc_hash->{"log_processing0"}->{"comments"}},  "Semantic Feature Tagging Time : $time_semtag";
+	    }
+
 	}	    
     }
 }
@@ -421,30 +316,121 @@ sub linguistic_annotation {
 
 ###########################################################################
 ###########################################################################
+
+sub platform_reset {
+#     %$doc_hash = ();
+    @Alvis::NLPPlatform::tab_end_sections_byaddr = ();
+    @Alvis::NLPPlatform::tab_end_sections_bytoken = ();
+    %Alvis::NLPPlatform::hash_tokens = ();
+    %Alvis::NLPPlatform::hash_words = ();
+    %Alvis::NLPPlatform::hash_words_punct = ();
+    %Alvis::NLPPlatform::hash_sentences = ();
+    %Alvis::NLPPlatform::hash_postags = ();
+    %Alvis::NLPPlatform::hash_named_entities = ();
+    %Alvis::NLPPlatform::hash_lemmas = ();
+    
+    $Alvis::NLPPlatform::number_of_words = 0;
+    $Alvis::NLPPlatform::number_of_sentences = 0;
+    $Alvis::NLPPlatform::nb_relations = 0;
+    $Alvis::NLPPlatform::dont_annotate = 0;
+    
+    @Alvis::NLPPlatform::word_start = ();
+    @Alvis::NLPPlatform::word_end = ();
+    
+    @Alvis::NLPPlatform::en_start = ();
+    @Alvis::NLPPlatform::en_end = ();
+    @Alvis::NLPPlatform::en_type = ();
+    
+    @Alvis::NLPPlatform::en_tokens_start = ();
+    @Alvis::NLPPlatform::en_tokens_end = ();
+    %Alvis::NLPPlatform::en_tokens_hash = ();
+
+ $Alvis::NLPPlatform::last_semantic_unit = 0;
+
+ %Alvis::NLPPlatform::last_words = ();
+ @Alvis::NLPPlatform::found_terms = ();
+ @Alvis::NLPPlatform::found_terms_tidx = ();
+ @Alvis::NLPPlatform::found_terms_smidx = ();
+ @Alvis::NLPPlatform::found_terms_phr = ();
+ @Alvis::NLPPlatform::found_terms_words = ();
+
+ $Alvis::NLPPlatform::phrase_idx = 1;
+
+    return(0);
+}
+
+
 ###########################################################################
 ###########################################################################
 ###########################################################################
 
-=head2 standalone_main()
+sub standalone {
+    my $config = shift;
+    my $HOSTNAME = shift;
+    my $doc = shift;
 
-    standalone_main($hash_config, $doc_xml, \*STDOUT);
+#    print STDERR "$ref_doc\n";
+#     my $tab_docs_xml = shift;
+#     my $doc_num = shift;
+
+    my $i;
+    my @cur_doc;
+    my $j;
+    my $tmpfile;
+    my $render_time;
+
+    my @records;
+    my $rec;
+    my $docR;
+    my $id;
+
+    my @doc_collection_out;
 
 
-This method is used to annotate a document in the standalone mode of
-the platform. The document (C<%doc_xml>) is given in the ALVIS XML
-format.
+    $tmpfile = $config->{'ALVISTMP'} . "/$HOSTNAME.$$.outfile";
 
-The document is loaded into memory and then annotated according to the
-steps defined in the configuration variables (C<$hash_config> is the
-reference to the hashtable containing the variables defined in the
-configuration file). The annotated document is printed to the file
-defined by the descriptor given as parameter (in the given example,
-the standard output). C<$printCollectionHeaderFooter> indicates if the
-C<documentCollection> header and footer have to be printed.
+#     print STDERR $doc;
 
-The function returns the time of the XML rendering.
+    @records=&split_to_docRecs($doc);
 
-=cut
+    $Alvis::NLPPlatform::last_doc = 0;
+
+    unlink $config->{'ALVISTMP'} . "/$HOSTNAME.$$.corpus.yatea.tmp";
+
+    for($i=0;$i <scalar(@records); $i++) {
+	if ($i == $#records) {
+	    $Alvis::NLPPlatform::last_doc = 1;
+	}
+	$rec = $records[$i];
+	($id,$docR)=@$rec;
+	warn "Process document $id\n";
+
+	open FILETMP_OUT, ">$tmpfile";
+	binmode(FILETMP_OUT, ":utf8");
+#	binmode(FILETMP_OUT);
+#      print FILETMP_OUT Encode::decode_utf8($doc);
+	Alvis::NLPPlatform::platform_reset();
+	$render_time = Alvis::NLPPlatform::standalone_main($config, $docR, \*FILETMP_OUT, 1); #${$tab_docs_xml->[$doc_num]}[1] ; ${$ref_doc}[1]
+	close(FILETMP_OUT);
+
+	open FILETMP_OUT, "$tmpfile" or die "No such file or directory\n";
+	@cur_doc = <FILETMP_OUT>;
+	$j = 0;
+	while(($j< scalar @cur_doc) && ($cur_doc[$j] !~ s/\@RENDER_TIME_NOT_SET\@/$render_time/)) {
+	    $j++;
+	}
+	close(FILETMP_OUT);
+
+        if (!((exists $config->{"XML_OUTPUT"}->{"NO_STD_XML_OUTPUT"}) && ($config->{"XML_OUTPUT"}->{"NO_STD_XML_OUTPUT"} == 1))) {
+	    push @doc_collection_out, @cur_doc;
+	}
+    }
+
+#     print STDERR "$tmpfile\n";
+     unlink $tmpfile;
+#    return @cur_doc;
+    return @doc_collection_out;
+}
 
 sub standalone_main {
     my $h_config = $_[0];
@@ -458,7 +444,7 @@ sub standalone_main {
 
     my $doc_hash;
 
-    $last_semantic_unit=1;
+    $last_semantic_unit=0;
     $cur_doc_nb=1;
     compute_dependencies($h_config);
     $NLPTOOLS=$h_config->{'NLP_tools_root'};
@@ -468,10 +454,15 @@ sub standalone_main {
     if (!exists $h_config->{'TMPFILE'}) {
 	$h_config->{'TMPFILE'}="$ALVISTMP/$HOSTNAME.$$";
     }
+    $ALVISLOGFILE= "$ALVISTMP/alvis.$HOSTNAME.$$.log";
+
+    if (exists $h_config->{'DEBUG'}) {
+	$ALVISDEBUG = $h_config->{'DEBUG'};
+    }
+    
 
     print STDERR "\n";
 
-    open LOGERRORS,">$ALVISTMP/alvis.log";
 
     $time_load=0;
     $time_tok=0;
@@ -484,7 +475,7 @@ sub standalone_main {
     $time_render=0;
 
     # Load document record
-    warn "Loading DR... ";
+    print STDERR "Loading DR... ";
     undef %$doc_hash;
     %$doc_hash=();
     $doc_hash=0;
@@ -505,6 +496,8 @@ sub standalone_main {
     @found_terms_smidx=();
     @found_terms_phr=();
     @found_terms_words=();
+
+    $phrase_idx=1;
 
     @tab_errors=();
 
@@ -548,8 +541,9 @@ sub standalone_main {
 	print STDERR "Rendering XML...  ";
 
 	starttimer();
+	$time_render = 0;
 	push @{$doc_hash->{"log_processing0"}->{"comments"}},  "XML rendering Time : \@RENDER_TIME_NOT_SET\@";
-	Alvis::NLPPlatform::Annotation::render_xml($doc_hash, $descriptor, $printCollectionHeaderFooter);
+	Alvis::NLPPlatform::Annotation::render_xml($doc_hash, $descriptor, $printCollectionHeaderFooter, $h_config);
 	$time_render+=endtimer();
 
 # TODO : recording the xml rendering time
@@ -566,6 +560,7 @@ sub standalone_main {
     print STDERR "\n";
 
     # log errors
+    open LOGERRORS,">>$ALVISLOGFILE";
     if(scalar @tab_errors>0){
 	print LOGERRORS "Document $Alvis::NLPPlatform::Annotation::document_record_id (number $cur_doc_nb)\n";
 	foreach $log_entry(@tab_errors){
@@ -581,21 +576,6 @@ sub standalone_main {
     return($time_render);
 }
 
-=head2 client_main()
-
-    client_main($doc_hash, $r_config);
-
-
-This method is used to annotate a document in the distributed mode of
-the NLP platform. The document  given in the ALVIS XML
-format is already is loaded into memory (C<$doc_hash>).
-
-The document is annotated according to the steps defined in the
-configuration variables. The annotated document is returned to the
-calling method.
-
-
-=cut
 
 sub client_main {
     
@@ -603,7 +583,7 @@ sub client_main {
     my $doc_hash = $_[0];
     my $r_config = $_[1];
 
-    $last_semantic_unit=1;
+    $last_semantic_unit=0;
     $cur_doc_nb=1;
     compute_dependencies($r_config);
     $NLPTOOLS=$r_config->{'NLP_tools_root'};
@@ -616,8 +596,12 @@ sub client_main {
 
     print STDERR "\n";
 
+    $ALVISLOGFILE= "$ALVISTMP/alvis.$HOSTNAME.$$.log";
+#     $ALVISLOGFILE=$r_config->{'TMPFILE'} . ".log";
 
-    open LOGERRORS,">$ALVISTMP/alvis.log";
+    if (exists $r_config->{'DEBUG'}) {
+	$ALVISDEBUG = $r_config->{'DEBUG'};
+    }
 
     $time_load=0;
     $time_tok=0;
@@ -635,7 +619,7 @@ sub client_main {
     $doc_hash->{"log_processing2"}->{"comments"} = $HOSTNAME;
 
     # Load document record
-    warn "Loading DR... ";
+    print STDERR "Loading DR... ";
 
     %hash_tokens=();
 
@@ -654,7 +638,11 @@ sub client_main {
     @found_terms_phr=();
     @found_terms_words=();
 
+    $phrase_idx=1;
+
     @tab_errors=();
+    
+    Alvis::NLPPlatform::platform_reset();
 
 
     if($doc_hash!=0)
@@ -671,6 +659,7 @@ sub client_main {
     print STDERR "\n";
 
     # log errors
+    open LOGERRORS,">>$ALVISLOGFILE";
     if(scalar @tab_errors>0){
 	print LOGERRORS "Document $Alvis::NLPPlatform::Annotation::document_record_id (number $cur_doc_nb)\n";
 	foreach $log_entry(@tab_errors){
@@ -685,16 +674,6 @@ sub client_main {
     return($doc_hash);
     
 }
-
-=head2 load_config()
-
-    load_config($rcfile);
-
-The method loads the configuration of the NLP Platform by reading the
-configuration file given in argument.
-
-
-=cut
 
 sub load_config 
 {
@@ -713,14 +692,143 @@ sub load_config
 				   );
     
     my %config = $conf->getall;
-    `mkdir -p $config{'ALVISTMP'}`; # to put in a specific method
+    mkpath($config{'ALVISTMP'});
     return(%config);
 }
 
 
-=head2 client()
+sub print_config
+{
+    my $config = $_[0];
+    my $var;
 
-=cut
+    my %general_vars = ( "ALVISTMP" => "Temporary directory",
+                         "PLATFORM_ROOT" => "Platform Root Directory",
+			 "NLP_tools_root" => "Root directory of the NLP tools",
+		     );
+    print STDERR "General variables\n";
+    foreach $var (keys %general_vars) {
+	if (defined $config->{$var}) { 
+	    print STDERR "\t". $general_vars{$var} . " : " . $config->{$var} . "\n";
+	}
+    }
+
+    print STDERR "Printing Section\n";
+    if (defined $config->{"alvis_connection"}) {
+	print STDERR "  Section Definition of the Alvis connection\n";
+
+	my %alvis_connection_vars = ("HARVESTER_PORT" => "Harvester port",
+				     "NEXTSTEP" => "Send information to the next step of the pipeline?",
+				     "NEXTSTEP_HOST" => "Next step host",
+				     "NEXTSTEP_PORT" => "Next step port",
+				     "SPOOLDIR" => "Spool directory",
+				     "OUTDIR" => "Output directory",
+				     );
+	foreach $var (keys %alvis_connection_vars) {
+	    if (defined $config->{"alvis_connection"}->{$var}) { 
+		print STDERR "\t" . $alvis_connection_vars{$var} . " : " . $config->{"alvis_connection"}->{$var} . "\n";
+	    }
+	}
+    }
+
+    if (defined $config->{"NLP_connection"}) {
+	print STDERR "  Section Definition of the NLP connection\n";
+
+	my %nlp_connection_vars = ("SERVER" => "NLP Server host",
+				     "PORT" => "NLP Server port",
+				     "RETRY_CONNECTION" => "Number of time for retrying the connection",
+	);
+	foreach $var (keys %nlp_connection_vars) {
+	    if (defined $config->{"NLP_connection"}->{$var}) { 
+		print STDERR "\t" . $nlp_connection_vars{$var} . " : " . $config->{"NLP_connection"}->{$var} . "\n";
+	    }
+	}
+    }
+
+    if (defined $config->{"XML_INPUT"}) {
+	print STDERR "  Section Configuration of the XML INPUT\n";
+
+	my %xml_input_vars = ("PRESERVEWHITESPACE" => "Preserve XML White space?",
+				     "LINGUISTIC_ANNOTATION_LOADING" => "Loading previous linguistic annotation?",
+	);
+	foreach $var (keys %xml_input_vars) {
+	    if (defined $config->{"XML_INPUT"}->{$var}) { 
+		print STDERR "\t" . $xml_input_vars{$var} . " : " . $config->{"XML_INPUT"}->{$var} . "\n";
+	    }
+	}
+    }
+
+    if (defined $config->{"XML_OUTPUT"}) {
+	print STDERR "  Section Configuration of the XML OUTPUT\n";
+
+	my %xml_output_vars = ("NO_STD_XML_OUTPUT" => "No printing standard XML output?",
+	);
+	foreach $var (keys %xml_output_vars) {
+	    if (defined $config->{"XML_OUTPUT"}->{$var}) { 
+		print STDERR "\t" . $xml_output_vars{$var} . " : " . $config->{"XML_OUTPUT"}->{$var} . "\n";
+	    }
+	}
+    }
+
+    &compute_dependencies($config);
+
+    if (defined $config->{"NLP_misc"}) {
+	print STDERR "  Section Miscellaneous NLP configuration features\n";
+
+	my %NLP_misc_vars = ("NLP_resources" => "NLP resource directory",
+			       "SAVE_IN_OUTDIR" => "Saving Annotated documents in the output directory?",
+			       "TERM_LIST_EN" => "File containing the terms for English",
+			       "TERM_LIST_FR" => "File containing the terms for French",
+	);
+	foreach $var (keys %NLP_misc_vars) {
+	    if (defined $config->{"NLP_misc"}->{$var}) { 
+		print STDERR "\t" . $NLP_misc_vars{$var} . " : " . $config->{"NLP_misc"}->{$var} . "\n";
+	    }
+	}
+    }
+
+    if (defined $config->{"NLP_tools"}) {
+	print STDERR "  Section NLP tool path and command line\n";
+
+	my %NLP_tools_vars = ("NETAG_EN" => "English Named Entity Recognizer command line",
+			      "NETAG_FR" => "French Named Entity Recognizer command line",
+			      "WORDSEG_EN" => "English Word Segmentizer command line",
+			      "WORDSEG_FR" => "French Word Segmentizer command line",
+			      "POSTAG_EN" => "English POS Tagger command line",
+			      "POSTAG_FR" => "French POS Tagger  command line",
+			      "SYNTACTIC_PATH_EN" => "English Parser command line",
+			      "SYNTACTIC_PATH_FR" => "French Parser command line",
+	);
+	foreach $var (keys %NLP_tools_vars) {
+	    if (defined $config->{"NLP_tools"}->{$var}) { 
+		print STDERR "\t" . $NLP_tools_vars{$var} . " : " . $config->{"NLP_tools"}->{$var} . "\n";
+	    }
+	}
+    }
+
+
+    if (defined $config->{"CONVERTERS"}) {
+	print STDERR "  Section INPUT CONVERTERS\n";
+
+	my %Converter_vars = ("SupplMagicFile" => "File for Additional Definition of Magic Number",
+	);
+	foreach $var (keys %Converter_vars) {
+	    if (defined $config->{"CONVERTERS"}->{$var}) { 
+		print STDERR "\t" . $Converter_vars{$var} . " : " . $config->{"CONVERTERS"}->{$var} . "\n";
+	    }
+	}
+	print STDERR "\tRecognized formats:\n";
+	$Converter_vars{"STYLESHEET"} = 1;
+	my $format;
+	foreach $format (keys %{$config->{"CONVERTERS"}}) {
+	    if (!exists($Converter_vars{$format})) {
+		print STDERR "\t\t$format\n";
+	    }
+	}
+
+    }
+    
+}
 
 sub client
 {
@@ -729,13 +837,14 @@ sub client
 
     my %config = Alvis::NLPPlatform::load_config($rcfile);
 
-    my $nlp_host = $config{"NLP_connection"}->{"SERVER"};
-    my $nlp_port = $config{"NLP_connection"}->{"PORT"};
+    $nlp_host = $config{"NLP_connection"}->{"SERVER"};
+    $nlp_port = $config{"NLP_connection"}->{"PORT"};
+    $connection_retry=$config{"alvis_connection"}->{"RETRY_CONNECTION"};
 
     my $line;
     my $doc_xml_size;
     my $doc_xml;
-    my $connection_retry;
+#    my $connection_retry;
     my $sock=0;
     my $time_render;
     my $sig_handler = "";
@@ -766,7 +875,7 @@ sub client
 
 #     die "Could not create socket: $!\n" unless $sock;
 	$sock -> autoflush(1); ###############
-	binmode($sock, ":utf8");
+ 	binmode($sock, ":utf8");
 	print STDERR `date`;
 	print STDERR "Established connection to server.\n";
 	
@@ -790,7 +899,7 @@ sub client
 		next;
 	    }
 	}
-	
+
 	print STDERR "GETTING $id\n";
 
 # SIZE of $doc_xml
@@ -890,8 +999,9 @@ sub client
 	print STDERR "\tRendering XML...  ";
 
 	starttimer();
+	$time_render = 0;
 	push @{$doc_hash->{"log_processing0"}->{"comments"}},  "XML rendering Time : \@RENDER_TIME_NOT_SET\@";
-	Alvis::NLPPlatform::Annotation::render_xml($doc_hash, $sock, 1);
+	Alvis::NLPPlatform::Annotation::render_xml($doc_hash, $sock, 1,\%config);
 	$time_render+=endtimer();
 
 # TODO : recording the xml rendering time
@@ -913,8 +1023,7 @@ sub client
 	    if($line=~/ACK/gi){
 		close($sock);
 		last;
-	    }
-	}
+	    }	}
 	print STDERR "OK.\n";
 
 	close($sock);
@@ -927,28 +1036,19 @@ sub client
 }
 
 
-=head2 sigint_handler()
-
-    sigint_handler($signal, $r_config);
-
-This method is used to catch the INT signal and send a ABORTING
-message to the server.
-
-=cut
-
 sub sigint_handler {
 
-    my ($signal, $r_config) = @_;
+    my ($signal) = @_;
     my $sock;
 
-    my $nlp_host = $r_config->{"NLP_connection"}->{"SERVER"};
-    my $nlp_port = $r_config->{"NLP_connection"}->{"PORT"};
+#     $nlp_host = $r_config->{"NLP_connection"}->{"SERVER"};
+#     $nlp_port = $r_config->{"NLP_connection"}->{"PORT"};
 
 
     warn "Receiving SIGINT -- Aborting NL processing\n";
 
+    
 
-    my $connection_retry=$r_config->{"alvis_connection"}->{"RETRY_CONNECTION"};
     do {
 	$sock=new IO::Socket::INET( PeerAddr => $nlp_host,
 				    PeerPort => $nlp_port,
@@ -990,9 +1090,6 @@ sub sigint_handler {
     exit;
 }
 
-=head2 server()
-
-=cut
 
 sub server 
 {
@@ -1002,7 +1099,9 @@ sub server
 
     my %config = Alvis::NLPPlatform::load_config($rcfile);
 
-
+     $nlp_host = $config{"NLP_connection"}->{"SERVER"};
+     $nlp_port = $config{"NLP_connection"}->{"PORT"};
+     $connection_retry = $config{"alvis_connection"}->{"RETRY_CONNECTION"};
 #    print STDERR Dumper(\%config);
 
     my $charset = 'UTF-8';
@@ -1020,13 +1119,13 @@ sub server
 
     $|=1;
 
-    system("touch " . $config{"ALVISTMP"} . "/.proc_id");
+    touch($config{"ALVISTMP"} . "/.proc_id");
 
     &init_server(\%config);
 
-    system("rm -f " . $config{"ALVISTMP"} . "/.proc_id");
-    system("touch " . $config{"ALVISTMP"} . "/.proc_id");
-    system("mkdir -p " . $config{"alvis_connection"}->{"OUTDIR"} );
+    unlink($config{"ALVISTMP"} . "/.proc_id");
+    touch($config{"ALVISTMP"} . "/.proc_id");
+    mkpath($config{"alvis_connection"}->{"OUTDIR"});
     my $n=1;
 
     my $annotated_xml;
@@ -1116,7 +1215,7 @@ sub server
 				}
 				
 				my $xml2 = $xml;
-				&disp_log($name,"Sending Document sent to client ("  . (length($xml2) + 1 ) . " bytes).");
+				&disp_log($name,"Sending Document to client ("  . (length($xml2) + 1 ) . " bytes).");
 				&disp_log($name, "SENDING $id");
 				&record_id($id,\%config);
 				print $client_sock "SENDING $id\n";
@@ -1175,10 +1274,14 @@ sub server
 		    
 		    $id = <$client_sock>;
 		    chomp $id;
+
+		    &disp_log($name,"Annotated document ID: $id");
 		    
 		    # Recording the annotation document (local)
 		    $sub_dir=&sub_dir_from_id($id);
-		    if ($config{"NLP_misc"}->{"SAVE_IN_OUTDIR"}) {system("mkdir -p " . $config{"alvis_connection"}->{"OUTDIR"} . "/$sub_dir");}
+		    if ($config{"NLP_misc"}->{"SAVE_IN_OUTDIR"}) {
+			mkpath( $config{"alvis_connection"}->{"OUTDIR"} . "/$sub_dir");
+		    }
 		    my $xml = "";
 		    if (($config{"NLP_misc"}->{"SAVE_IN_OUTDIR"} == 0) || (defined(open(O,">:utf8", $config{"alvis_connection"}->{"OUTDIR"} . "/$sub_dir/${id}.xml"))))
 		    {
@@ -1186,14 +1289,17 @@ sub server
 			    # recording the annotation document (local)
 			    # building xml string for sending to the next step
 			    $xml .= $line;
+# 			    print STDERR $line;
 			}
+# 			print STDERR $line;
 			# get the RENDER TIME
 			if ((defined $sock) && ($line = <$client_sock>) && ($line eq "RENDER TIME\n")) {
 			    if ((defined $sock) && ($line = <$client_sock>)) {
 				chomp $line;
 				$xml =~ s/\@RENDER_TIME_NOT_SET\@/$line/;
+# 				print STDERR $line;
 			    } else {
-				warn "\n***\nValue of nrender time is not sent\n***\n\n";
+				warn "\n***\nValue of render time is not sent\n***\n\n";
 			    }
 		        } else {
 			    warn "\n***\nRender time is not sent\n***\n\n";
@@ -1250,7 +1356,7 @@ sub server
 		    }
 		    $pipe_out->write($xmlhead . $rec_out . $xmlfoot);
 		    close ABORTING_FILE;
-		    &delete_id($id,%config);
+		    &delete_id($id,\%config);
 		    &disp_log($name,"Sending ACK to client...");
 		    print $client_sock "ACK\n";
 		    &disp_log($name,"Sent ACK to client - Finished aborting.");
@@ -1277,16 +1383,6 @@ sub server
 }
 
 
-=head2 disp_log()
-
-    disp_log($hostname,$message);
-
-This method prints the message (C<$message>) on the standard error
-output, in a formatted way: 
-
-C<date: (client=hostname) message>
-
-=cut
 
 sub disp_log{
     my $date=`date`;
@@ -1296,15 +1392,6 @@ sub disp_log{
     print STDERR $_[1]."\n";
 }
 
-=head2 split_to_docRecs()
-
-    split_to_docRecs($xml_docs);
-
-This method splits a list of documents into a table and return
-it. Each element of the table is a two element table containing the
-document id and the document.
-
-=cut
 
 sub split_to_docRecs
 {
@@ -1315,6 +1402,8 @@ sub split_to_docRecs
     my $doc;
     my $Parser=XML::LibXML->new();
 
+
+#       print STDERR $xml;
 
     eval
     {
@@ -1333,7 +1422,26 @@ sub split_to_docRecs
 	if ($doc)
 	{
 
-	    my $root=$doc->documentElement();
+ 	    my $root=$doc->documentElement();
+
+#  	    print STDERR "\n\n==> ";
+
+# # 	    $doc->setEncoding("UTF-8");
+
+#             print STDERR $doc->encoding();
+
+#  	    print STDERR "\n";
+
+#             print STDERR $doc->version();
+
+#  	    print STDERR "\n";
+
+# 	    print STDERR  $root->nodeName();
+
+  
+
+#  	    print STDERR "\n\n";
+
 	    for my $rec_node ($root->getChildrenByTagName('documentRecord'))
 	    {
 		my $id=$rec_node->getAttribute("id");
@@ -1370,17 +1478,6 @@ sub unparseable_id
 }
 
 
-=head2 sub_dir_from_id()
-
-
-    sub_dir_from_id($doc_id)
-
-Ths method returns the subdirectory where annotated document will
-stored. It computes the subdirectory from the two first characters of
-the document id (C<$doc_id>).
-
-=cut
-
 sub sub_dir_from_id
 {
     my $id=shift;
@@ -1388,41 +1485,33 @@ sub sub_dir_from_id
     return substr($id,0,2);
 }
 
-=head2 record_id()
-
-    record_id($doc_id, $r_config);
-
-
-This method records in the file C<$ALVISTMP/.proc_id>, the id of the
-document that has been sent to the client.
-
-=cut
 
 
 sub record_id {
     my ($doc_id, $r_config) = @_;
 
     my $file_id = $r_config->{"ALVISTMP"} . "/.proc_id";
-    my $fh = new IO::File("+>$file_id")
+    my $fh = new IO::File("+<$file_id")
 	or die "can't read '$file_id': $!";
+    flock($fh, LOCK_EX) or die "can't lock '$file_id': $!";
+    seek($fh, 0, SEEK_END) or die "can't seek to start of '$file_id': $!";
+
+#     my @tab_proc_id;
+
+#     while($line = $fh->getline()) {
+# 	if ($line ne "$doc_id\n") {
+# 	    push @tab_proc_id, $line;
+# 	}
+#     }
+    
     $fh->print("$doc_id\n") or die "can't write in '$file_id': $!";
 
-    flock($fh, LOCK_EX) or die "can't lock '$file_id': $!";
     
     flock($fh, LOCK_UN) or die "can't unlock '$file_id': $!";
     $fh->close() or die "Truly unbelievable";
     
 }
 
-=head2 delete_id()
-
-    delete_id($doc_id,$r_config);
-
-
-This method delete the id of the document that has been sent to the
-client, from the file C<$ALVISTMP/.proc_id>.
-
-=cut
 
 sub delete_id {
     my ($doc_id, $r_config) = @_;
@@ -1430,7 +1519,7 @@ sub delete_id {
     my @tab_proc_id;
 
     my $file_id = $r_config->{"ALVISTMP"} . "/.proc_id";
-    my $fh = new IO::File("+<$file_id")
+    my $fh = new IO::File("<$file_id")
 	or die "can't read '$file_id': $!";
     flock($fh, LOCK_EX) or die "can't lock '$file_id': $!";
     while($line = $fh->getline()) {
@@ -1438,7 +1527,10 @@ sub delete_id {
 	    push @tab_proc_id, $line;
 	}
     }
-    seek($fh, 0, SEEK_SET) or die "can't seek to start of '$file_id': $!";
+    $fh->close() or die "Truly unbelievable";
+    $fh = new IO::File(">$file_id")
+	or die "can't write '$file_id': $!";
+#     seek($fh, 0, SEEK_SET) or die "can't seek to start of '$file_id': $!";
     foreach $line (@tab_proc_id) {
 	$fh->print("$line") or die "can't write in '$file_id': $!";
     }
@@ -1447,19 +1539,6 @@ sub delete_id {
     $fh->close() or die "Truly unbelievable";
     
 }
-
-=head2 init_server()
-
-
-    init_server($r_config);
-
-
-This method initializes the server. It reads the document id from the
-file C<$ALVISTMP/.proc_id> and loads the corresponding documents
-i.e. documents which have been annotated but not recorded due to a
-server crash.
-
-=cut
 
 sub init_server {
     my $r_config = $_[0];
@@ -1510,6 +1589,418 @@ sub init_server {
     print STDERR "Server Initialisation Done\n";
 }
 
+
+sub token_id_is_in_list_refid_token
+{
+    my $list_refid_token = $_[0];
+    my $token_to_search = $_[1];
+    
+#    warn "searching $token_to_search\n";
+
+    my $tok_id;
+
+    foreach $tok_id (@$list_refid_token) {
+	if ($tok_id eq $token_to_search) {
+	    return 1;
+	}
+    }
+    return 0;
+}
+
+sub token_id_follows_list_refid_token
+{
+    my $list_refid_token = $_[0];
+    my $token_to_search = $_[1];
+    
+#    warn "searching $token_to_search\n";
+
+#     print STDERR "$list_refid_token\n";
+#     print STDERR scalar(@$list_refid_token) . "\n";
+
+    if ($list_refid_token->[scalar(@$list_refid_token) - 1] =~ /token([0-9]+)/) {
+	my $last_token_id = $1;
+	if ($token_to_search =~ /token([0-9]+)/) {
+	    my $token_to_search_id = $1;
+	    if ($token_to_search_id == $last_token_id + 1) {
+		return 1;
+	    }
+	}
+    }
+	    return 0;
+}
+
+sub token_id_just_before_last_of_list_refid_token
+{
+    my $list_refid_token = $_[0];
+    my $token_to_search = $_[1];
+    
+#    warn "searching $token_to_search\n";
+
+#      print STDERR "$list_refid_token\n";
+#      print STDERR "$token_to_search\n";
+#     print STDERR scalar(@$list_refid_token) . "\n";
+
+    if ($list_refid_token->[0] =~ /token([0-9]+)/) {
+	my $last_token_id = $1;
+	if ($token_to_search =~ /token([0-9]+)/) {
+	    my $token_to_search_id = $1;
+	    if ($token_to_search_id < $last_token_id) {
+		return 1;
+	    }
+	}
+    }
+	    return 0;
+}
+
+
+1;
+
+__END__
+
+
+=head1 NAME
+
+Alvis::NLPPlatform - Perl extension for linguistically annotating XML documents in Alvis
+
+=head1 SYNOPSIS
+
+=over 
+
+=item * Standalone mode:
+
+    use Alvis::NLPPlatform;
+
+    Alvis::NLPPlatform::standalone_main(\%config, $doc_xml, \*STDOUT);
+
+=item * Distributed mode:
+
+    # Server process
+
+    use Alvis::NLPPlatform;
+
+    Alvis::NLPPlatform::server($rcfile);
+
+    # Client process
+
+    use Alvis::NLPPlatform;
+
+    Alvis::NLPPlatform::client($rcfile);
+
+=back
+
+=head1 DESCRIPTION
+
+This module is the main part of the Alvis NLP platform. It provides
+overall methods for the linguistic annotation of web documents.
+Linguistic annotations depend on the configuration variables and
+dependencies between linguistic steps.
+
+Input documents are assumed to be in the ALVIS XML format
+(C<standalone_main>) or to be loaded in a hashtable
+(C<client_main>). The annotated document is recorded in the given
+descriptor (C<standalone_main>) or returned as a hashtable
+(C<client_main>).
+
+The ALVIS format is described here: 
+
+http://www.alvis.info/alvis/Architecture_2fFormats?action=show&redirect=architecture%2Fformats#documents
+
+The DTD and XSD are provied in etc/alvis-nlpplatform.
+
+
+=head1 Linguistic annotation: requirements
+
+=over 4
+
+=item 1
+
+ Tokenization: this step has no dependency. It is required for
+         any following annotation level.
+
+=item 2
+
+ Named Entity Tagging: this step requires tokenization. 
+
+=item 3
+
+ Word segmentation: this step requires tokenization.
+         The  Named Entity Tagging step is recommended to improve the segmentation.
+
+=item 4
+
+ Sentence segmentation: this step requires tokenization.
+         The  Named Entity Tagging step is recommended to improve the segmentation. 
+
+=item 5
+
+ Part-Of-Speech Tagging: this step requires tokenization, and word and
+ sentence segmentation.
+
+=item 6
+
+ Lemmatization: this step requires tokenization, 
+word and sentence segmentation, and Part-of-Speech tagging.
+
+=item 7
+
+ Term Tagging: this step requires tokenization, 
+word and sentence segmentation, and Part-of-Speech tagging. Lemmatization is recommended to improve the term recognition.
+
+
+=item 8
+
+ Parsing: this step requires tokenization, word and sentence
+segmentation.  Term tagging is recommended to improve the parsing of noun phrases.
+
+=item 9
+
+ Semantic feature tagging: To be determined
+
+=item 10
+
+ Semantic relation tagging: To be determined
+
+=item 11
+
+ Anaphora resolution: To be determined
+
+=back
+
+=head1 METHODS
+
+=head2 compute_dependencies()
+
+    compute_dependencies($hashtable_config);
+
+This method processes the configuration variables defining the
+linguistic annotation steps. C<$hash_config> is the
+reference to the hashtable containing the variables defined in the
+configuration file.  The dependencies of the linguistic
+annotations are then coded. For instance, asking for POS annotation will
+imply tokenization, word and sentence segmentations.
+
+
+=head2 starttimer()
+
+    starttimer()
+
+This method records the current date and time. It is used to compute
+the time of a processing step.
+
+
+
+=head2 endtimer()
+
+    endtimer();
+
+This method ends the timer and returns the time of a processing step, according to the time recorded by C<starttimer()>.
+
+
+
+=head2 linguistic_annotation()
+    
+    linguistic_annotation($h_config,$doc_hash);
+
+This methods carries out the lingsuitic annotation according to the list
+of required annotations. Required annotations are defined by the
+configuration variables (C<$hash_config> is the
+reference to the hashtable containing the variables defined in the
+configuration file).
+
+The document to annotate is passed as a hash table (C<$doc_hash>). The
+method adds annotation to this hash table.
+
+=head2  standalone()
+
+    standalone($config, $HOSTNAME, $doc);
+
+This method is used to annotate a document in the standalone mode of
+the platform. The document C<$doc> is given in
+the ALVIS XML format.
+
+The reference to the hashtable C<$config> contains the configuration
+variables. The variable C<$HOSTNAME> is the host name.
+
+The method returns the annotation document.
+
+=head2 standalone_main()
+
+    standalone_main($hash_config, $doc_xml, \*STDOUT);
+
+
+This method is used to annotate a document in the standalone mode of
+the platform. The document (C<%doc_xml>) is given in the ALVIS XML
+format.
+
+The document is loaded into memory and then annotated according to the
+steps defined in the configuration variables (C<$hash_config> is the
+reference to the hashtable containing the variables defined in the
+configuration file). The annotated document is printed to the file
+defined by the descriptor given as parameter (in the given example,
+the standard output). C<$printCollectionHeaderFooter> indicates if the
+C<documentCollection> header and footer have to be printed.
+
+The function returns the time of the XML rendering.
+
+
+
+=head2 client_main()
+
+    client_main($doc_hash, $r_config);
+
+
+This method is used to annotate a document in the distributed mode of
+the NLP platform. The document  given in the ALVIS XML
+format is already is loaded into memory (C<$doc_hash>).
+
+
+
+The document is annotated according to the steps defined in the
+configuration variables. The annotated document is returned to the
+calling method.
+
+
+
+=head2 load_config()
+
+    load_config($rcfile);
+
+The method loads the configuration of the NLP Platform by reading the
+configuration file given in argument.
+
+
+=head2 print_config()
+
+    print_config($config);
+
+The method prints the configuration loaded from a file and contained
+in the hash reference $config.
+
+
+=head2 client()
+
+  client($rcfile)
+
+
+This is the main method for the client process.
+C<$rcfile> is the file name containing the configuration.  
+
+
+
+=head2 sigint_handler()
+
+    sigint_handler($signal);
+
+This method is used to catch the INT signal and send a ABORTING
+message to the server.
+
+
+=head2 server()
+
+  server($rcfile)
+
+
+This is the main method for the server process.
+C<$rcfile> is the file name containing the configuration.  
+
+
+=head2 disp_log()
+
+    disp_log($hostname,$message);
+
+This method prints the message (C<$message>) on the standard error
+output, in a formatted way: 
+
+C<date: (client=hostname) message>
+
+
+=head2 split_to_docRecs()
+
+    split_to_docRecs($xml_docs);
+
+This method splits a list of documents into a table and return
+it. Each element of the table is a two element table containing the
+document id and the document.
+
+
+
+=head2 sub_dir_from_id()
+
+
+    sub_dir_from_id($doc_id)
+
+Ths method returns the subdirectory where annotated document will
+stored. It computes the subdirectory from the two first characters of
+the document id (C<$doc_id>).
+
+
+
+=head2 record_id()
+
+    record_id($doc_id, $r_config);
+
+
+This method records in the file C<$ALVISTMP/.proc_id>, the id of the
+document that has been sent to the client.
+
+
+=head2 delete_id()
+
+    delete_id($doc_id,$r_config);
+
+
+This method delete the id of the document that has been sent to the
+client, from the file C<$ALVISTMP/.proc_id>.
+
+
+=head2 init_server()
+
+
+    init_server($r_config);
+
+
+This method initializes the server. It reads the document id from the
+file C<$ALVISTMP/.proc_id> and loads the corresponding documents
+i.e. documents which have been annotated but not recorded due to a
+server crash.
+
+=head2 token_id_is_in_list_refid_token()
+
+    token_id_is_in_list_refid_token($list_refid_token, $token_to_search);
+
+The method returns 1 if the token C<$token_to_search> is in the list
+C<$list_refid_token>, 0 else.
+
+
+=head2 token_id_follows_list_refid_token()
+
+    token_id_follows_list_refid_token($list_refid_token, $token_to_search);
+
+The method returns 1 if the token C<$token_to_search> is the foollwing
+of the last token of the list C<$list_refid_token>, 0 else.
+
+
+=head2 token_id_just_before_last_of_list_refid_token()
+
+    token_id_just_before_last_of_list_refid_token($list_refid_token, $token_to_search);
+
+The method returns 1 if the token C<$token_to_search> is just before
+the first token of the list C<$list_refid_token>, 0 else.
+
+=head2 unparseable_id()
+
+   unparseable_id($id)
+
+The method checks if the id have been parsed or not. If not, it prints
+a warning.
+
+=head2 platform_reset()
+
+   platform_reset()
+
+The method empties or resets the structures and variables attached to
+a processed document.
+
 =head1 PLATFORM CONFIGURATION
 
 The configuration file of the NLP Platform is composed of global
@@ -1520,27 +2011,73 @@ variables and divided into several sections:
 =item * Global variables.
 
 The two mandatory variables are C<ALVISTMP> and C<PRESERVEWHITESPACE>
- (in the XML_INPUT section). C<ALVISTMP> defines the temporary
- directory used during the annotation process. It must be writable to
- the user the process is running as. C<$preserveWhiteSpace> is a
- boolean indicating if the linguistic annotation will be done by
- preserving white space or not, i.e. XML blank nodes and white space
- at the beginning and the end of any line.
+ (in the XML_INPUT section). 
 
-Additional variables and environement variables can be used if they
-are interpolated in the configuration file. For instance, in the
-default configuration file, we add C<PLATFORM_ROOT>,
-C<NLP_tools_root>, and C<AWK>.
 
 =over 8
 
 =item * 
 
-C<ALVISTMP> : temporary directory where files are recorded
-(XML files and input/output of the NLP tools) during the annotation
-step.
+C<ALVISTMP> : it defines the temporary directory used during the
+ annotation process. The files are recorded in (XML files and
+ input/output of the NLP tools) during the annotation step.  It must
+ be writable to the user the process is running as.
+
+=item *
+
+C<DEBUG> : this variable indicates if the NLP platform is run in a
+debug mode or not. The value are 1 (debug mode) or 0 (no debug
+mode). Default value is 0. The main consequence of the debug mode is
+to keep the temporary file.
 
 =back
+
+
+Additional variables and environement variables can be used if they
+are interpolated in the configuration file. For instance, in the
+default configuration file, we add 
+
+=over
+
+=item *
+
+C<PLATFORM_ROOT>: directory where are installed NLP tools and resources.
+
+
+
+=item * 
+
+C<NLP_tools_root>: root directory where are installed the NLP tools
+
+
+
+=item *
+
+C<AWK>: path for awk
+
+=item *
+
+C<SEMTAG_EN_DIR>: directory where is installed the semantic tagger
+
+=item *
+
+C<ONTOLOGY>: path for the ontology for the semanticTypeTagger (trish2
+format -- see documentation of the semanticTypeTagger)
+
+=item *
+
+C<CANONICAL_DICT>: path for the dictionary with the canonical form of
+the semantic units (trish2 format -- see documentation of the
+semanticTypeTagger)
+
+=item *
+
+C<PARENT_DICT>:: path for the dictionary with the parent nodes of the
+semantic units (trish2 format -- see documentation of the
+semanticTypeTagger)
+
+=back
+
 
 =item * Section C<alvis_connection>
 
@@ -1553,7 +2090,7 @@ C<HARVESTER_PORT>: the port of the  harverster/crawler (C<combine>) that the pla
 =item * 
 
 C<NEXTSTEP>: indicates if there is a next step in the pipeline
-(for instance, the indexer IdZebra). the value is C<0> or C<1>.
+(for instance, the indexer IdZebra). The value is C<0> or C<1>.
 
 =item * 
 
@@ -1603,26 +2140,44 @@ the clients attempts to connect to the server.
 
 =over 8
 
-=item C<PRESERVEWHITESPACE>: this option takes into account or xml
-blank nodes and indentation of the text in the
-canonicalDocument. Default value is C<0> or false (blank nodes and
+=item *
+
+C<PRESERVEWHITESPACE> is a boolean indicating if the linguistic
+ annotation will be done by preserving white space or not, i.e. XML
+ blank nodes and white space at the beginning and the end of any line,
+ but also indentation of the text in the canonicalDocument
+
+Default value is C<0> or false (blank nodes and
 indentation characters are removed).
 
 
-=item C<LINGUISTIC_ANNOTATION_LOADING>: The linguistic annotations
-already existing in the input documents are loaded or not. Default
-value is c<1> or true (linguistic annotations are loaded).
+=item *
+
+C<LINGUISTIC_ANNOTATION_LOADING>: The linguistic annotations already
+existing in the input documents are loaded or not. Default value is
+c<1> or true (linguistic annotations are loaded).
 
 =back
 
 
-=item * C<XML_OUTPUT>
+=item * 
+
+C<XML_OUTPUT> (Not available yet)
 
 =over 8
 
-=item FORM
+=item *
 
-=item ID
+C<NO_STD_XML_OUTPUT>: The standard XML output is not printed. Default
+value is false.
+
+=item 
+
+FORM
+
+=item 
+
+ID
 
 =back
 
@@ -1741,9 +2296,60 @@ C<TERM_TAG_EN>: command line for the term tagger for English.
 
 C<TERM_TAG_FR>: command line for the term tagger for French.
 
+=item * 
+
+C<SEMTAG_EN>: command line for the semantic tagger for English.
+
+=item * 
+
+C<SEMTAG_FR>: command line for the semantic tagger for French.
+
 
 =back
 
+=item * Section C<CONVERTERS>
+
+
+This section defines the converters for th MIME types and additional
+information (see following subsections).
+
+Each line of this section indicates the command line for the
+corresping MIME types.
+
+=over 8
+
+=item * Section C<STYLESHEET>
+
+This section defines the command lines (the program and the
+stylesheet) to apply according to the namespace. Each line defines a
+variable (the name is the namespace), the value is the command line.
+
+A default cammand line is defined by the variable C<default>.
+
+=over 12
+
+=item *
+
+C<default> 
+
+This variable defines the default cammand line, i.e. for unknown name space.
+
+=back
+
+=item *
+
+C<SupplMagicFile> 
+
+This variable indicates the file defining the additional MIME types.
+
+=item *
+
+C<StoreInputFiles> 
+
+This internal variable indicates if the converted input file are
+stored in a directory.
+
+=back
 
 =back
 
@@ -1822,7 +2428,7 @@ segmentize French texts.
 
 =item * Version number required:
 
- any (mods for French by Paris 13)
+ any (modifications for French by Paris 13)
 
 =back
 
@@ -1876,22 +2482,25 @@ Run install-tagger.sh
 
 =head2 Term Tagger
 
+
 We have integrated a tool developed specifically for the Alvis
-project. It will be available as Perl script soon.
+project.It is required while installing the platform.
 
 =over
 
 =item * Form:
 
- Perl script
+ Perl module
 
 =item * Obtain:
 
- http://www-lipn.univ-paris13.fr/~hamon/ALVIS/Tools/TermTagger.tar.gz
+ On CPAN, http://search.cpan.org/~thhamon/Alvis-TermTagger-0.3/
 
 =item * Install:
 
-   untar TermTagger.tar.gz in a directory
+   perl Makefile.PL
+   make
+   make install
 
 =item *  Licence:
 
@@ -2010,7 +2619,10 @@ BioLG:
 
 =item * Version number required:
 
- 1.1.10
+ 1.1.11
+
+=item * additional programs
+
 
 =back
 
@@ -2072,10 +2684,104 @@ C<Alvis::NLPPlatform::UserNLPWrappers>.
 
 =back
 
+=head1 PROTOCOL
+
+=over 4
+
+=item * Requesting a document:
+
+=over 8
+
+=item 1. I<from the client, to the server>: 
+
+=over 12
+
+=item C<REQUEST>
+
+=back
+
+=item 2. I<from the server, to the client>:
+
+=over 12
+
+=item C<SENDING> I<id> (I<id> is the document id)
+
+=item C<SIZE> I<size> (I<size> is the document size)
+
+=item I<document> (I<document> is the XML document)
+
+=item E<lt>C<DONE>E<gt>
+
+=back
+
+=item 3. I<from the client, to the server>:
+
+=over 12
+
+=item C<ACK>
+
+=back
+
+=back
+
+=item * Returning a document:
+
+=over 8
+
+=item 1. I<from the client, to the server>: 
+
+=over 12
+
+=item C<GIVEBACK>
+
+=item I<id> (I<id> is the document id)
+
+=item I<document> (I<document> is the annotated document)
+
+=item E<lt>C<DONE>E<gt>
+
+=back
+
+=item 2. I<from the server, to the client>: 
+
+=over 12
+
+=item C<ACK>
+
+=back 
+
+=back
+
+=item * Aborting the annotation process: 
+
+=over 8
+
+=item 1. I<from the client, to the server>: 
+
+=over 12
+
+=item C<ABORTING>
+
+=item I<id> (I<id> is the document id)
+
+=back
+
+=back
+
+=item * Exiting: 
+
+the server understands the following messages C<QUIT>, C<LOGOUT> and
+C<EXIT>. However, this is not been implemented in the client yet.
+
+
+=back
 
 =head1 SEE ALSO
 
 Alvis web site: http://www.alvis.info
+
+Description of the input/output format: http://www.alvis.info/alvis/Architecture_2fFormats?action=show&redirect=architecture%2Fformats#documents
+
 
 =head1 AUTHORS
 
@@ -2091,4 +2797,39 @@ at your option, any later version of Perl 5 you may have available.
 
 =cut
 
-1;
+
+# =head2 Semantic Tagger
+
+# SemanticTypeTagger:
+
+# =over
+
+# =item * Form:
+
+#  sources + resources
+
+# =item * Obtain:
+
+
+
+# =item * Install:
+
+# (see the README in the archive)
+ 
+#     untar
+    
+#     run make check
+
+#     rn make
+
+
+# =item * Licence:
+
+#  Compatible with GPL
+
+# =item * Version number required:
+
+#  0.4
+
+# =back
+

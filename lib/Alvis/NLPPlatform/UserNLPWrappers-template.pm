@@ -1,6 +1,7 @@
 package Alvis::NLPPlatform::UserNLPWrappers;
 
 use strict;
+use warnings;
 
 use Alvis::NLPPlatform::NLPWrappers;
 

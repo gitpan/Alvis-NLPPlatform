@@ -18,9 +18,16 @@ To install this module type the following:
    make test
    make install
 
+Or if you don't have the "make" program:
+
+   perl Build.PL
+   Build
+   Build test
+   Build install
+
 DEPENDENCIES
 
-This module do not require any  other modules and libraries:
+This module requires the other modules and libraries:
 
  Time::HiRes
  IO::Socket
@@ -37,6 +44,7 @@ This module do not require any  other modules and libraries:
  Sys::Hostname
  Fcntl
  utf8
+ Encode
 
 Corresponding Debian packages are : 
 

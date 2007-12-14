@@ -1,3 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<collectionRecord xmlns="http://alvis.info/enriched/">
   <documentRecord id="A79ACA58DEB7E6114747710B9A85059F">
     <acquisition>
       <acquisitionData>
@@ -46,3 +48,4 @@ C5szux/8Mydgl+9tiHc7aM1Ak9RRMVLEP/QW/rWa/AMkdjGykg8AAA==
       </canonicalDocument>
     </acquisition>
   </documentRecord>
+</collectionRecord>
