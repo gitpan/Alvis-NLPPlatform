@@ -1,6 +1,6 @@
 ---
 name: Alvis-NLPPlatform
-version: 0.4
+version: 0.5
 author:
   - 'Thierry Hamon <thierry.hamon@lipn.univ-paris13.fr> and Julien Deriviere <julien.deriviere@lipn.univ-paris13.fr>'
 abstract: Perl extension for linguistically annotating XML documents in Alvis
@@ -8,26 +8,35 @@ license: gpl
 resources:
   license: http://www.opensource.org/licenses/gpl-license.php
 requires:
+  Alvis::Convert: 0
   Alvis::Pipeline: 0
   Alvis::TermTagger: 0.3
   Config::General: 2.3
   Data::Dumper: 0
+  Encode: 0
   Fcntl: 0
+  File::Basename: 0
+  File::MMagic: 0
+  File::Path: 0
+  File::Touch: 0
   Getopt::Long: 0
+  IO: 0
   IO::File: 0
-  IO::Socket: 0
   IO::Socket::INET: 0
+  Lingua::Identify: 0
+  Parse::Yapp: 0
   Pod::Usage: 0
   Sys::Hostname: 0
   Time::HiRes: 0
   XML::LibXML: 0
+  XML::Parser: 0
   XML::Parser::PerlSAX: 0
   perl: 5.005
   utf8: 0
 provides:
   Alvis::NLPPlatform:
     file: lib/Alvis/NLPPlatform.pm
-    version: 0.4
+    version: 0.5
   Alvis::NLPPlatform::Annotation:
     file: lib/Alvis/NLPPlatform/Annotation.pm
   Alvis::NLPPlatform::Canonical:

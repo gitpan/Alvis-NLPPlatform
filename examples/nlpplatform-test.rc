@@ -177,8 +177,8 @@ PARENT_DICT = $SEMTAG_EN_DIR/share/Subtilis_Molecular_Biology-v2.parent.trish2 #
 
 	# SYNTACTIC_ANALYSIS_EN	= "cd $SYNTACTIC_PATH_EN ; $SYNTACTIC_PATH_EN/parse -xmlin"
 	SYNTACTIC_ANALYSIS_FR	= ""
-	TERM_TAG_FR		= "/usr/bin/TermTagger.pl"
-	TERM_TAG_EN		= "/usr/bin/TermTagger.pl"
+	TERM_TAG_FR		= ""
+	TERM_TAG_EN		= ""
         SEMTAG_EN               = "$SEMTAG_EN_DIR/src/AlvisSemTag -c $CANONICAL_DICT -p $PARENT_DICT -o $ONTOLOGY"
         SEMTAG_FR               = ""
 </NLP_tools>

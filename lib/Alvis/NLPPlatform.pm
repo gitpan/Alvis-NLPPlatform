@@ -5,7 +5,7 @@
 package Alvis::NLPPlatform;
 
 
-our $VERSION='0.4';
+our $VERSION='0.5';
 
 
 use strict;
@@ -26,7 +26,7 @@ use Alvis::Pipeline;
 use File::Path qw(mkpath);
 use File::Touch;
 
-use Data::Dumper;
+#use Data::Dumper;
 
 my $cur_doc_nb;
 my $done_parsing;

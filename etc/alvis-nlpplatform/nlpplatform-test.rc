@@ -164,8 +164,8 @@ NLP_tools_root = $PLATFORM_ROOT/tools
 	# SYNTACTIC_ANALYSIS_EN	= "cd $SYNTACTIC_PATH_EN ; $SYNTACTIC_PATH_EN/parse"
 	SYNTACTIC_ANALYSIS_EN	= "cd $SYNTACTIC_PATH_EN ; $SYNTACTIC_PATH_EN/parse -xmlin"
 	SYNTACTIC_ANALYSIS_FR	= ""
-	TERM_TAG_FR		= "$NLP_tools_root/TermTagger/FiltragepleinText-vers2.pl"
-	TERM_TAG_EN		= "$NLP_tools_root/TermTagger/FiltragepleinText-vers2.pl"
+	TERM_TAG_FR		= ""
+	TERM_TAG_EN		= ""
         YATEARC                 = "/etc/yatea/yatea-devTH.rc"
         YATEAOUTPUT             = "$ALVISTMP"
 </NLP_tools>

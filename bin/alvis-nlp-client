@@ -8,7 +8,7 @@ use Alvis::NLPPlatform::Annotation;
 
 use Pod::Usage;
 use Config::General;
-use Data::Dumper;
+#use Data::Dumper;
 use Getopt::Long;
 
 # Process Option

@@ -1,5 +1,9 @@
 Revision history for Perl extension Alvis::NLPPlatform.
 
+0.5    - Addition of missing packages in the installation file
+         (Build.PL) 
+       - Switching the Makefile.PL on Build.PL
+
 0.4    - Correction in the function sigint handler : nlp_host and
          nlp_port are now declared as global.
        - Correction in the TermTagging : language switch was well
