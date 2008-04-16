@@ -1,4 +1,4 @@
-Alvis-NLPPlatform version 0.3
+Alvis-NLPPlatform version 0.6
 ================================
 
 This is a module to annotate Web document in the ALVIS pipeline.
@@ -25,26 +25,38 @@ Or if you don't have the "make" program:
    Build test
    Build install
 
+ It requires Mdoule::Build version 0.28 (at least) and File::chmod
+
 DEPENDENCIES
 
 This module requires the other modules and libraries:
 
- Time::HiRes
- IO::Socket
- XML::Parser::PerlSAX
- Alvis::TermTagger
- Getopt::Long
- Alvis::Pipeline
- XML::LibXML
- IO::File
- IO::Socket::INET
- Getopt::Long
- Pod::Usage
- Config::General
- Sys::Hostname
- Fcntl
- utf8
- Encode
+  Time::HiRes
+  IO
+  XML::Parser::PerlSAX
+  Data::Dumper
+  Alvis::TermTagger
+  Alvis::Pipeline
+  Alvis::Convert
+  XML::LibXML
+  IO::File
+  IO::Socket::INET
+  Getopt::Long
+  Pod::Usage
+  Config::General
+  Sys::Hostname
+  Fcntl
+  utf8
+  File::Touch
+  File::Basename
+  Encode
+  Fcntl
+  File::Path
+  File::MMagic
+  File::Basename
+  Lingua::Identify
+  XML::Parser
+  Parse::Yapp
 
 Corresponding Debian packages are : 
 

@@ -3,6 +3,7 @@ use strict;
 use warnings;
 
 
+our $VERSION=$Alvis::NLPPlatform::VERSION;
 
 sub CleanUp
 {

@@ -30,6 +30,8 @@ lib/Alvis/NLPPlatform/UserNLPWrappers.pm
 lib/Alvis/NLPPlatform/XMLEntities.pm
 lib/Alvis/NLPPlatform/patches/link-4.1a-WithWhiteSpace.diff
 lib/Alvis/NLPPlatform/patches/link-4.1b-WithWhiteSpace.diff
+lib/Alvis/NLPPlatform/ParseConstituents.pm
+lib/Alvis/NLPPlatform/ParseConstituents.yp
 examples/load_config
 examples/InputDocument.xml
 examples/nlpplatform-test.rc

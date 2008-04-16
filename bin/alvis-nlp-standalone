@@ -136,7 +136,7 @@ my $HOSTNAME=hostname;
 #     close(FILETMP_OUT);
 #     unlink $tmpfile;
 #     print @cur_doc;
-    print Alvis::NLPPlatform::standalone(\%config, $HOSTNAME, $doc_xml);
+    Alvis::NLPPlatform::standalone(\%config, $HOSTNAME, $doc_xml);
 # }
 
 # Alvis::NLPPlatform::Annotation::print_documentCollectionFooter(\*STDOUT);

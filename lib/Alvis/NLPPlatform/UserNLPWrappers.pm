@@ -13,6 +13,7 @@ use UNIVERSAL qw(isa);
 our @ISA = ("Alvis::NLPPlatform::NLPWrappers");
 
 
+our $VERSION=$Alvis::NLPPlatform::VERSION;
 
 
 sub tokenize {
@@ -85,10 +86,10 @@ sub term_tag
 
     my $class = shift @arg;
 
-           $class->SUPER::term_tag(@arg);
+    $class->SUPER::term_tag(@arg);
 #           &PrintOutputTreeTagger(@arg, \*STDOUT);
 #           exit;
-#           &execYaTeA(@arg);
+#            &execYaTeA(@arg);
 #      exit;
 }
 
@@ -286,12 +287,18 @@ sub PrintOutputTreeTagger {
     foreach $ne(keys %Alvis::NLPPlatform::hash_named_entities){
 	$ne_cont=$Alvis::NLPPlatform::hash_named_entities{$ne};
 	$ne_mod=$ne_cont;
-	if($ne_cont=~/ /){
-	    if($sentences_cont=~/\Q$ne_cont\E/){
-		$ne_mod=~s/ /\_/g;
-		$sentences_cont=~s/$ne_cont/$ne_mod/g;
+	if(($ne_cont =~ / /) && ($ne_cont !~ /^ *$/)) {
+	    if($sentences_cont =~ /\Q$ne_cont\E/){
+		$ne_mod =~ s/ /\_/g;
+		$sentences_cont =~ s/\Q$ne_cont\E/$ne_mod/g;
 	    }
 	}
+# 	if ($ne_cont=~/ /){
+# 	    if($sentences_cont=~/\Q$ne_cont\E/){
+# 		$ne_mod=~s/ /\_/g;
+# 		$sentences_cont=~s/$ne_cont/$ne_mod/g;
+# 	    }
+# 	}
     }
     if ($last_mark_is_end_of_sentence == 0) {
 	$sentences_cont.= " \tSENT\t \n";
@@ -461,7 +468,7 @@ sub execYaTeA {
 
 # coments to keep
     print STDERR "\t-" . ($yatea->getMessageSet->getMessage('DISPLAY_RAW')->getContent($yatea->getOptionSet->getDisplayLanguage)) . "\'". $corpus->getOutputFileSet->getFile('debug')->getPath . "'\n";
-    $phrase_set->printPhrases($corpus->getOutputFileSet->getFile('debug'));
+    $phrase_set->printPhrases(FileHandle->new(">" . $corpus->getOutputFileSet->getFile('debug')->getPath));
     $phrase_set->printUnparsable($corpus->getOutputFileSet->getFile('unparsable'));
 
 

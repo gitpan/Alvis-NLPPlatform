@@ -1,8 +1,33 @@
 Revision history for Perl extension Alvis::NLPPlatform.
 
+0.6    - Word semgentation : Non break chracter (\xA0) was missing 
+       - Bug fix in the wrapper of Yatea, while producing
+         the input of Yatea
+       - Bug fix in the reader on Alvis document
+         (Alvis::NLPPlatform::Document::get_langage)
+       - Workaround for a missing feature in Module::Info : if no
+         prefix is set while running "perl Build.PL", additionnal
+         directories 'etc' and 'conf' are not installed (or well installed)
+       - The location of the rc file (yatea.rc) is automatically set,
+         while the configuration (in Build.PL)
+       - in standalone mode, annotated documents are printed just
+         after processing (and not more keep in memory)
+       - change in the default term tagger wrapper to take into
+         account carriage return in the sentence (in case of dirty
+         text)
+       - Corrections in the LICENSE file
+       - Semantic tags provided by the default term tagger are
+         integrated at the semantic features level
+       - bug fixed in the argument management of the script
+         ogmios-nlp-standalone
+       - for some OS, Config::General returns while setting variables
+         as yatea.rc is on read-inly mode
+
+
 0.5    - Addition of missing packages in the installation file
          (Build.PL) 
        - Switching the Makefile.PL on Build.PL
+       - Correction in the Yatea wrapper in the handling of the output file.
 
 0.4    - Correction in the function sigint handler : nlp_host and
          nlp_port are now declared as global.
@@ -40,7 +65,7 @@ Revision history for Perl extension Alvis::NLPPlatform.
          output for the platform.
        - bug fixes
        - Rewrite of the TreeTagger wraper always by using
-       - hash_words_punct but less complexe
+         hash_words_punct but less complexe
 
        - Modification in the Wrapper of bioLG : options are set in the
          XML form

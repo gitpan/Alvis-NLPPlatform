@@ -18,17 +18,19 @@ use Encode;
 
 my $man = 0;
 my $help = 0;
-my $rcfile = "";
+my $rcfile ;
 
 my $current_dir;
 my $dirfile;
 my $file;
 
+warn "\nRunning Ogmios (Alvis NLP Platform) version " . $Alvis::NLPPlatform::VERSION . "\n\n";
+
 GetOptions('help|?' => \$help, man => \$man, "rcfile=s" => \$rcfile) or pod2usage(2);
 pod2usage(1) if $help;
 pod2usage(-exitstatus => 0, -verbose => 2) if $man;
 
-if (($rcfile eq "") || (!(-f $rcfile))) {
+if ((defined $rcfile) && (($rcfile eq "") || (!(-f $rcfile)))) {
     warn "No such config file or config file is not set\n";
     pod2usage(1);
 } 
@@ -50,6 +52,7 @@ if (scalar @ARGV == 0) {
     die "Try '" . basename($0) . " --help' for more information.\n";
 }
 
+
 foreach $file (@ARGV) {
     if (-f $file) {
 	print STDERR "Converting the file $file ...\n";
@@ -60,7 +63,7 @@ foreach $file (@ARGV) {
 
  	$doc =  Alvis::NLPPlatform::Convert::conversion_file_to_alvis_xml($file, $AlvisConverter, \%config, $mm);
 
- 	print Alvis::NLPPlatform::standalone(\%config, $HOSTNAME, $doc);
+ 	Alvis::NLPPlatform::standalone(\%config, $HOSTNAME, $doc);
 	print STDERR "\tdone\n";
 	
     } else { 

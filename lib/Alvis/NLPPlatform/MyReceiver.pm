@@ -12,6 +12,7 @@ use Alvis::NLPPlatform::XMLEntities;
 
 use Data::Dumper;
 
+our $VERSION=$Alvis::NLPPlatform::VERSION;
 
 ###
 ### Package

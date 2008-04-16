@@ -3,6 +3,8 @@ use strict;
 
 use warnings;
 
+our $VERSION=$Alvis::NLPPlatform::VERSION;
+
 sub encode
 {
     $_[0]=~s/&/&amp;/g;

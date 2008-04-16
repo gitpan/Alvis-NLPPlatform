@@ -217,11 +217,11 @@ application/xml =
 
 <STYLESHEET>
 
-default = xsltproc $PLATFORM_ROOT/etc/alvis-nlpplatform/xsl/Default.xsl
+default = xsltproc ../etc/alvis-nlpplatform/xsl/Default.xsl
 
 </STYLESHEET>
 
-SupplMagicFile = "$PLATFORM_ROOT/etc/alvis-nlpplatform/mime/magic.TeX"
+SupplMagicFile = "../etc/alvis-nlpplatform/mime/magic.TeX"
 
 # StoreInputFiles = 0
 

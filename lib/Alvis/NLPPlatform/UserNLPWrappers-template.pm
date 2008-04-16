@@ -7,6 +7,7 @@ use Alvis::NLPPlatform::NLPWrappers;
 
 our @ISA = ("Alvis::NLPPlatform::NLPWrappers");
 
+our $VERSION=$Alvis::NLPPlatform::VERSION;
 
 =head1 NAME
 

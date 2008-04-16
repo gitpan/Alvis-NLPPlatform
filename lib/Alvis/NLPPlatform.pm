@@ -5,7 +5,7 @@
 package Alvis::NLPPlatform;
 
 
-our $VERSION='0.5';
+our $VERSION='0.6';
 
 
 use strict;
@@ -61,6 +61,7 @@ our @en_tokens_end;
 our %en_tokens_hash;
 
 our $last_semantic_unit;
+our $last_semantic_feature;
 
 our %last_words;
 our @found_terms;
@@ -118,18 +119,18 @@ our @tab_errors;
 my $log_entry;
 
 # BENCHMARKING
-my $time_load;
-my $time_tok;
-my $time_ne;
-my $time_word;
-my $time_sent;
-my $time_pos;
-my $time_lemm;
-my $time_term;
-my $time_synt;
-my $time_semtag;
-my $time_render;
-my $time_total;
+my $time_load = 0;
+my $time_tok = 0;
+my $time_ne = 0;
+my $time_word = 0;
+my $time_sent = 0;
+my $time_pos = 0;
+my $time_lemm = 0;
+my $time_term = 0;
+my $time_synt = 0;
+my $time_semtag = 0;
+my $time_render = 0;
+my $time_total = 0;
 
 
 
@@ -345,16 +346,17 @@ sub platform_reset {
     @Alvis::NLPPlatform::en_tokens_end = ();
     %Alvis::NLPPlatform::en_tokens_hash = ();
 
- $Alvis::NLPPlatform::last_semantic_unit = 0;
+    $Alvis::NLPPlatform::last_semantic_unit = 0;
+    $Alvis::NLPPlatform::last_semantic_feature = 0;
 
- %Alvis::NLPPlatform::last_words = ();
- @Alvis::NLPPlatform::found_terms = ();
- @Alvis::NLPPlatform::found_terms_tidx = ();
- @Alvis::NLPPlatform::found_terms_smidx = ();
- @Alvis::NLPPlatform::found_terms_phr = ();
- @Alvis::NLPPlatform::found_terms_words = ();
+    %Alvis::NLPPlatform::last_words = ();
+    @Alvis::NLPPlatform::found_terms = ();
+    @Alvis::NLPPlatform::found_terms_tidx = ();
+    @Alvis::NLPPlatform::found_terms_smidx = ();
+    @Alvis::NLPPlatform::found_terms_phr = ();
+    @Alvis::NLPPlatform::found_terms_words = ();
 
- $Alvis::NLPPlatform::phrase_idx = 1;
+    $Alvis::NLPPlatform::phrase_idx = 1;
 
     return(0);
 }
@@ -422,8 +424,19 @@ sub standalone {
 	close(FILETMP_OUT);
 
         if (!((exists $config->{"XML_OUTPUT"}->{"NO_STD_XML_OUTPUT"}) && ($config->{"XML_OUTPUT"}->{"NO_STD_XML_OUTPUT"} == 1))) {
-	    push @doc_collection_out, @cur_doc;
+	    if (scalar(@records) > 1) {
+		if ($i == 0){
+		    pop @cur_doc;
+		} else {
+		    shift @cur_doc;
+		    shift @cur_doc;
+		}
+	    }
+#	    push @doc_collection_out, @cur_doc;
+		print @cur_doc;
 	}
+	$time_total=$time_load+$time_tok+$time_ne+$time_word+$time_sent+$time_pos+$time_lemm+$time_term+$time_synt + $time_semtag + $time_render;
+	warn "Total processing time: $time_total\n";
     }
 
 #     print STDERR "$tmpfile\n";
@@ -441,10 +454,11 @@ sub standalone_main {
     my $xmlhead="";#"<?xml version=\"1.0\" encoding=\"$charset\"?>\n<documentCollection xmlns=\"http://alvis.info/enriched/\" version=\"1.1\">\n";
     my $xmlfoot="";#</documentCollection>\n";
 
-
     my $doc_hash;
 
     $last_semantic_unit=0;
+    $last_semantic_feature = 0;
+
     $cur_doc_nb=1;
     compute_dependencies($h_config);
     $NLPTOOLS=$h_config->{'NLP_tools_root'};
@@ -502,6 +516,7 @@ sub standalone_main {
     @tab_errors=();
 
     starttimer();
+
 
 #     $doc_xml =~ s/("<\?xml version=\"1.0\" encoding=\"$charset\"?>\n
     $doc_hash=Alvis::NLPPlatform::Annotation::load_xml($doc_xml, $h_config);
@@ -584,6 +599,8 @@ sub client_main {
     my $r_config = $_[1];
 
     $last_semantic_unit=0;
+    $last_semantic_feature = 0;
+
     $cur_doc_nb=1;
     compute_dependencies($r_config);
     $NLPTOOLS=$r_config->{'NLP_tools_root'};
@@ -682,7 +699,7 @@ sub load_config
  
 # Read de configuration file
 
-    if ($rcfile eq "") {
+    if ((!defined $rcfile) || ($rcfile eq "")) {
 	$rcfile = "/etc/alvis-nlpplatform/nlpplatform.rc";
     }
     

@@ -7,6 +7,8 @@ use Lingua::Identify;
 
 use Data::Dumper;
 
+our $VERSION=$Alvis::NLPPlatform::VERSION;
+
 # use YAML qw( Dump );
 
 sub getnamespace
@@ -105,6 +107,8 @@ sub get_language_from_file
 	if ($doc)
 	{
 	    my $xmlalvisdata = &get_language($doc);
+
+
 	    open OUTPUT_FILE, ">$outfile";
 	    binmode(OUTPUT_FILE, ":utf8");
 	    print OUTPUT_FILE "$xmlalvisdata\n";
@@ -170,6 +174,8 @@ sub get_language
 
 #       print STDERR Dumper $doc;
 
+#     print STDERR $doc->toString();
+
     print STDERR "In get_language\n";
 
     my $root=$doc->documentElement();
@@ -179,6 +185,7 @@ sub get_language
     my $language_exists = 0;
 
 #     print STDERR $root->nodeName() . "\n";
+
 
     my @rec_node;
     my $rec_node;
@@ -225,7 +232,9 @@ sub get_language
 	    }
 	}
      }
-    return($root->toString());
+#     print STDERR $doc->toString();
+#    print STDERR $root->toString();
+    return($doc->toString());
 #     return($rec_node->toString());
 }
 

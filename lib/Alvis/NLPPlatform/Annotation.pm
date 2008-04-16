@@ -19,6 +19,8 @@ use Time::HiRes qw(gettimeofday tv_interval);
 
 use Encode;
 
+our $VERSION=$Alvis::NLPPlatform::VERSION;
+
 our $xmlhead = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<documentCollection xmlns=\"http://alvis.info/enriched/\" version=\"1.1\">\n";
 our $xmlfoot = "</documentCollection>\n";
 
@@ -65,9 +67,9 @@ sub sort_keys {
 
     my $key1;
     my $key2;
-    $a=~m/^(token|word|lemma|phrase|morphosyntactic_features|sentence|semantic_unit|syntactic_relation|log_processing)([0-9]+)/;
+    $a=~m/^(token|word|lemma|phrase|morphosyntactic_features|sentence|semantic_unit|syntactic_relation|log_processing|semantic_features)([0-9]+)/;
     $key1=$2;
-    $b=~m/^(token|word|lemma|phrase|morphosyntactic_features|sentence|semantic_unit|syntactic_relation|log_processing)([0-9]+)/;
+    $b=~m/^(token|word|lemma|phrase|morphosyntactic_features|sentence|semantic_unit|syntactic_relation|log_processing|semantic_features)([0-9]+)/;
     $key2=$2;
     return -1 if ($key1 < $key2);
     return 0 if ($key1 == $key2);
@@ -136,6 +138,7 @@ sub render{
     my $layer_tag=0;
     my $layer_lemma=0;
     my $layer_semantic=0;
+    my $layer_semantic_features=0;
     my $layer_phrase=0;
     my $layer_log=0;
     my $layer_parsing=0;
@@ -244,7 +247,7 @@ sub render{
 		print_Annotation($descriptor,   "$indent<lemma_level>\n");
  	    }
 
- 	    if(($markup_name=~/^semantic/) && ($layer_semantic==0)){
+ 	    if(($markup_name=~/^semantic_unit/) && ($layer_semantic==0)){
 		if($end_layer ne ""){
 		    print_Annotation($descriptor,   "$indent$end_layer");
 		}
@@ -256,6 +259,20 @@ sub render{
  		print_Annotation($descriptor,   "$indent<!--*************************-->\n");
  		print_Annotation($descriptor,   "\n");
 		print_Annotation($descriptor,   "$indent<semantic_unit_level>\n");
+ 	    }
+
+ 	    if(($markup_name=~/^semantic_features/) && ($layer_semantic_features==0)){
+		if($end_layer ne ""){
+		    print_Annotation($descriptor,   "$indent$end_layer");
+		}
+		$layer_semantic_features=1;
+		$end_layer="</semantic_features_level>\n";
+ 		print_Annotation($descriptor,   "\n");
+ 		print_Annotation($descriptor,   "$indent<!--*****************************-->\n");
+ 		print_Annotation($descriptor,   "$indent<!--   SEMANTIC FEATURES LAYER   -->\n");
+ 		print_Annotation($descriptor,   "$indent<!--*****************************-->\n");
+ 		print_Annotation($descriptor,   "\n");
+		print_Annotation($descriptor,   "$indent<semantic_features_level>\n");
  	    }
 
  	    if(($markup_name=~/^phrase/) && ($layer_phrase==0)){

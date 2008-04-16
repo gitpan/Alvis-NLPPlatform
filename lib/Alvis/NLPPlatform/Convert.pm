@@ -27,6 +27,7 @@ use File::Touch;
 use Data::Dumper;
 use Cwd;
 
+our $VERSION=$Alvis::NLPPlatform::VERSION;
 
 sub load_MagicNumber
 {

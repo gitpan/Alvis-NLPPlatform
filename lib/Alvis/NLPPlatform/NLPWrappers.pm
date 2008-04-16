@@ -10,6 +10,8 @@ use Alvis::TermTagger;
 #use Encode;
 use Encode qw(:fallbacks);;
 
+our $VERSION=$Alvis::NLPPlatform::VERSION;
+
 my @term_list_EN;
 my @regex_term_list_EN;
 
@@ -421,9 +423,11 @@ sub word_segmentation
     {
 #	$proposedword = Encode::encode_utf8($proposedword);
 	$word_id_str = "word$word_id";
-	if ($proposedword !~ /^\s*\n$/o) {
+#	if ($proposedword !~ /^[\s ]*\n$/o) {
+	if ($proposedword !~ /^[\s\x{A0}]*\n$/o) {
 	    chomp $proposedword;
 
+#	    print STDERR $proposedword;
 	    $current_word="";
 	    $doc_hash->{$word_id_str}={};
 	    $doc_hash->{$word_id_str}->{'id'}=$word_id_str;
@@ -731,6 +735,7 @@ sub sentence_segmentation
 	    if($btw_end != $Alvis::NLPPlatform::Annotation::nb_max_tokens){
 		if (Alvis::NLPPlatform::Annotation::read_key_id($Alvis::NLPPlatform::tab_end_sections_bytoken[$current_section_id]) >=
 		    $Alvis::NLPPlatform::word_start[Alvis::NLPPlatform::Annotation::read_key_id($word)+1]) {
+                    ### To check some token can start the sentence !
 		    $start_token=$Alvis::NLPPlatform::word_start[Alvis::NLPPlatform::Annotation::read_key_id($word)+1];
 		} else {
 		# "while" because we can have sections without sentences !
@@ -742,7 +747,10 @@ sub sentence_segmentation
 		} 
 	    }
 		# making the beginning of the new sentence
-		for($i=$btw_end + 1;$i < $next_wordtoken;$i++){
+		$i=$btw_end + 1;
+		    while ($doc_hash->{"token".$i}->{'type'} eq "sep") {$i++;}
+
+		for(;$i < $next_wordtoken;$i++){
 		    $token = $Alvis::NLPPlatform::hash_tokens{"token".$i};
 		    $sentence_cont .= $token;
 		}
@@ -956,6 +964,7 @@ sub term_tag
     my %tabh_sent_terms;
     my $key;
     my $sent;
+    my $term_regex;
     my $term;
     my $phrase_idx=1;
     my $canonical_form;
@@ -966,6 +975,7 @@ sub term_tag
     my %corpus_index;
     my %idtrm_select;
     my @tab_results;
+    my $semtag;
 
     my $token_start;
     my $token_end;
@@ -974,6 +984,8 @@ sub term_tag
     my $offset;
 
     my $semantic_unit_id_str;
+    my $semantic_feature_id_str;
+    my $sf = 1;
 
     my $token_term;
     my $token_term_end;
@@ -985,13 +997,19 @@ sub term_tag
     $sent_id = 1;
     foreach $sentence(Alvis::NLPPlatform::Annotation::sort(\%Alvis::NLPPlatform::hash_sentences)){
 	$tmp = "$Alvis::NLPPlatform::hash_sentences{$sentence}\n";
-	$tmp=~s/\n/\\n/go;
-	$tmp=~s/\r/\\r/go;
-	$tmp=~s/\t/\\t/go;
+ 	$tmp=~s/\n/ /go;
+	$tmp=~s/\r/ /go;
+	$tmp=~s/\t/ /go;
+# 	$tmp=~s/\n/\\n/go;
+# 	$tmp=~s/\r/\\r/go;
+# 	$tmp=~s/\t/\\t/go;
+# 	print STDERR "$tmp\n";
 	$corpus{$sent_id} = $tmp;
 	$lc_corpus{$sent_id} = lc($tmp);
 	$sent_id++;
     }
+
+
 
     # Term list loading 
 
@@ -1023,18 +1041,24 @@ sub term_tag
     for $key (keys %tabh_sent_terms) {
 	$sent = $tabh_sent_terms{$key}->[0];
 	$term = $tabh_sent_terms{$key}->[1];
+	$term_regex = $term;
+ 	$term_regex =~ s/ /\[ \n\]+/go;
+#  	print STDERR "try to find $term in sentence$sent\n";
+
 
         $canonical_form = $tabh_sent_terms{$key}->[2];
+        $semtag = $tabh_sent_terms{$key}->[3];
 
 	# look for the term in the sentence, compute the reference to the words
 	$token_term = -1;
 	$offset = 0;
 	while (($offset != -1)&&($token_term == -1)) {
-	    if ($Alvis::NLPPlatform::hash_sentences{"sentence$sent"} =~ /$term/igc) { # replace regex by index/subtring ?
+	    if ($Alvis::NLPPlatform::hash_sentences{"sentence$sent"} =~ /$term_regex/igc) { # replace regex by index/subtring ?
 		$offset = length($`);
 	    } else {
 		$offset = -1;
 	    }
+#  		print STDERR "Found (offset = $offset)\n";
 	    if ($offset != -1) {
 		$doc_hash->{"sentence$sent"}->{"refid_start_token"}=~m/token([0-9]+)/i;
 		$token_start=$1;
@@ -1045,21 +1069,24 @@ sub term_tag
 
 		$offset+=$offset_start;
 
+#  		print STDERR "Search token starting at $offset\n";
 		for($j=$token_start;$j<$token_end;$j++){
+# 		    print STDERR "Current offset : " . $doc_hash->{"token$j"}->{"from"} . "\n";
 		    if($doc_hash->{"token$j"}->{"from"}==$offset){
 			$token_term=$j;
 			last;
 		    }
 		}
-
+# 		print STDERR "Token Term start at $token_term\n";
 		if ($token_term != -1) {
 		    $cont="";
 		    my @tab_tokens;
 		    for($j=$token_term;length($cont)<length($term);$j++){
 			$cont.=$Alvis::NLPPlatform::hash_tokens{"token$j"};
 			push @tab_tokens, "token$j";
+			$cont =~ s/\\[nrt]/ /go;
 		    }
-
+# 		    print STDERR "$cont\n";
 		    if (length($cont) == length($term)) {
 			$token_term_end=$j-1;
 			$Alvis::NLPPlatform::hash_sentences{"sentence$sent"} =~ /^/g;
@@ -1079,6 +1106,24 @@ sub term_tag
 			if (defined($canonical_form)) {
 			    $doc_hash->{$semantic_unit_id_str}->{"term"}->{"canonical_form"}=$canonical_form;
 			}
+			if (defined($semtag)) {
+# 			    print STDERR "Add $semtag for $term\n";
+			    $sf=$Alvis::NLPPlatform::last_semantic_feature + 1;
+			    $semantic_feature_id_str = "semantic_features$sf";
+			    $doc_hash->{$semantic_feature_id_str}={};
+ 			    $doc_hash->{$semantic_feature_id_str}->{"datatype"}="semantic_features";
+ 			    $doc_hash->{$semantic_feature_id_str}->{"id"}=$semantic_feature_id_str; #"term" . ($i-1);
+ 			    $doc_hash->{$semantic_feature_id_str}->{"refid_semantic_unit"}="term$i";
+			    $doc_hash->{$semantic_feature_id_str}->{"semantic_category"}={};
+			    $doc_hash->{$semantic_feature_id_str}->{"semantic_category"}->{"datatype"}="semantic_category";
+			    $doc_hash->{$semantic_feature_id_str}->{"semantic_category"}->{"list_refid_ontology_node"}={};
+			    $doc_hash->{$semantic_feature_id_str}->{"semantic_category"}->{"list_refid_ontology_node"}->{"datatype"}="list_refid_ontology_node";
+			    my @semtag = split /[\.\/]/, $semtag;
+			    $doc_hash->{$semantic_feature_id_str}->{"semantic_category"}->{"list_refid_ontology_node"}->{"refid_ontology_node"} = \@semtag;
+			    $Alvis::NLPPlatform::last_semantic_feature++;
+			}
+
+
 			# XXX TO BE OPTIMIZED !!!
 
 			my $k=1;
@@ -1135,7 +1180,7 @@ sub term_tag
 			if ($j <$token_end) {
 			    $token_term = -1;
 			} else {
-			    warn "+++ Term content not found\n"; 
+			    warn "+++ Term content not found ($term -- $cont)\n"; 
 
 			}
 		    }
@@ -1144,6 +1189,13 @@ sub term_tag
 	}
     }
     $Alvis::NLPPlatform::Annotation::phrase_idx=$phrase_idx;
+    print STDERR "done - Found " . ($phrase_idx - 1) . " phrases\n";
+    push @{$doc_hash->{"log_processing1"}->{"comments"}},  "Found Phrases: " . ($phrase_idx - 1);
+
+    $Alvis::NLPPlatform::last_semantic_feature=$sf;
+    print STDERR "done - Found " . ($sf - 1) . " semantic features\n";
+    push @{$doc_hash->{"log_processing1"}->{"comments"}},  "Found Semantic Features: " . ($sf - 1);
+
     print STDERR "done - Found ". ($i) ." terms\n";
     push @{$doc_hash->{"log_processing1"}->{"comments"}},  "Found Terms: " . $i;
 }
@@ -1663,14 +1715,10 @@ UMLS (http://umlsinfo.nlm.nih.gov/ ). They can also be acquired through
 corpus analysis.
 
 
-
-
 The term matching in the document is carried out according to
 typographical and inflectional variations. 
 The typographical variation requires a slight preprocessing of the
 terms.
-
-
 
 We first assume a less strict use of the dash character. For instance,
 the term I<UDP-glucose> can appear in the documents as I<UDP glucose>
@@ -1681,11 +1729,15 @@ types can be taken into account altogether or separately during the
 term matching.  Previous annotation levels, such as lemmatisation and
 word segmentation but also named entities, are required.
 
-C<$hash_config> is the
-reference to the hashtable containing the variables defined in the
-configuration file.
+C<$hash_config> is the reference to the hashtable containing the
+variables defined in the configuration file.
 
-
+Canonical forms and semantic tags which can be provided with the term
+tagger and associated to the terms are taken into account. Canonical
+forms are associated to the terms. Semantic tags are added at the
+semantic features level. Semantic tags can be considered as a path in
+a ontology. Each dot or slash characters are considered as a separator
+of the node identifiers.
 
 =head2 syntactic_parsing()
 
